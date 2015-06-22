@@ -224,8 +224,12 @@ int mfEmlGetMem(uint8_t *data, int blockNum, int blocksCount) {
 }
 
 int mfEmlSetMem(uint8_t *data, int blockNum, int blocksCount) {
-	UsbCommand c = {CMD_MIFARE_EML_MEMSET, {blockNum, blocksCount, 0}};
-	memcpy(c.d.asBytes, data, blocksCount * 16); 
+	return mfEmlSetMem_xt(data, blockNum, blocksCount, 16);
+}
+
+int mfEmlSetMem_xt(uint8_t *data, int blockNum, int blocksCount, int blockBtWidth) {
+	UsbCommand c = {CMD_MIFARE_EML_MEMSET, {blockNum, blocksCount, blockBtWidth}};
+	memcpy(c.d.asBytes, data, blocksCount * blockBtWidth); 
 	SendCommand(&c);
 	return 0;
 }
