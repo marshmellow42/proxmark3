@@ -2,6 +2,7 @@
  *  FIPS-180-1 compliant SHA-1 implementation
  *
  *  Copyright (C) 2006-2014, ARM Limited, All Rights Reserved
+ *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -662,4 +663,3 @@ exit:
 #endif /* POLARSSL_SELF_TEST */
 
 #endif /* POLARSSL_SHA1_C */
-

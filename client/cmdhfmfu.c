@@ -16,16 +16,16 @@
 #include "protocols.h"
 #include "data.h"
 
-#define MAX_UL_BLOCKS      0x0f
-#define MAX_ULC_BLOCKS     0x2b
-#define MAX_ULEV1a_BLOCKS  0x13
-#define MAX_ULEV1b_BLOCKS  0x28
-#define MAX_NTAG_203       0x29
-#define MAX_NTAG_210       0x13
-#define MAX_NTAG_212       0x28
-#define MAX_NTAG_213       0x2c
-#define MAX_NTAG_215       0x86
-#define MAX_NTAG_216       0xe6
+#define MAX_UL_BLOCKS     0x0f
+#define MAX_ULC_BLOCKS    0x2b
+#define MAX_ULEV1a_BLOCKS 0x13
+#define MAX_ULEV1b_BLOCKS 0x28
+#define MAX_NTAG_203      0x29
+#define MAX_NTAG_210      0x13
+#define MAX_NTAG_212      0x28
+#define MAX_NTAG_213      0x2c
+#define MAX_NTAG_215      0x86
+#define MAX_NTAG_216      0xe6
 #define MAX_MY_D_NFC       0xff
 #define MAX_MY_D_MOVE      0x25
 #define MAX_MY_D_MOVE_LEAN 0x0f
@@ -129,24 +129,7 @@ static int ul_send_cmd_raw( uint8_t *cmd, uint8_t cmdlen, uint8_t *response, uin
 	memcpy(response, resp.d.asBytes, resplen);
 	return resplen;
 }
-/*
-static int ul_send_cmd_raw_crc( uint8_t *cmd, uint8_t cmdlen, uint8_t *response, uint16_t responseLength, bool append_crc ) {
-	UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_RAW | ISO14A_NO_DISCONNECT , cmdlen, 0}};
-	if (append_crc)
-		c.arg[0] |= ISO14A_APPEND_CRC;
 
-	memcpy(c.d.asBytes, cmd, cmdlen);	
-	clearCommandBuffer();
-	SendCommand(&c);
-	UsbCommand resp;
-	if (!WaitForResponseTimeout(CMD_ACK, &resp, 1500)) return -1;
-	if (!resp.arg[0] && responseLength) return -1;
-
-	uint16_t resplen = (resp.arg[0] < responseLength) ? resp.arg[0] : responseLength;
-	memcpy(response, resp.d.asBytes, resplen);
-	return resplen;
-}
-*/
 static int ul_select( iso14a_card_select_t *card ){
 
 	ul_switch_on_field();
@@ -276,20 +259,7 @@ static int ulev1_readSignature( uint8_t *response, uint16_t responseLength ){
 	return len;
 }
 
-
-// Fudan check checks for which error is given for a command with incorrect crc
-// NXP UL chip responds with 01, fudan 00.
-// other possible checks:
-//  send a0 + crc 
-//  UL responds with 00, fudan doesn't respond
-//  or
-//  send a200 + crc
-//  UL doesn't respond, fudan responds with 00
-//  or
-//  send 300000 + crc (read with extra byte(s))
-//  UL responds with read of page 0, fudan doesn't respond.
-//
-// make sure field is off before calling this function
+//make sure field is off before calling this function
 static int ul_fudan_check( void ){
 	iso14a_card_select_t card;
 	if ( !ul_select(&card) ) 
@@ -367,7 +337,9 @@ static int ndef_print_CC(uint8_t *data) {
 	PrintAndLog("  %02X : NDEF Magic Number", data[0]); 
 	PrintAndLog("  %02X : version %d.%d supported by tag", data[1], (data[1] & 0xF0) >> 4, data[1] & 0x0f);
 	PrintAndLog("  %02X : Physical Memory Size: %d bytes", data[2], (data[2] + 1) * 8);
-	if ( data[2] == 0x12 )
+	if ( data[2] == 0x96 )
+		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 48);
+	else if ( data[2] == 0x12 )
 		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 144);
 	else if ( data[2] == 0x3e )
 		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 496);
@@ -895,7 +867,7 @@ int CmdHF14AMfUInfo(const char *Cmd){
 //
 int CmdHF14AMfUWrBl(const char *Cmd){
 
-	int blockNo = -1;
+	int blockNo = -1;	
 	bool errors = false;
 	bool hasAuthKey = false;
 	bool hasPwdKey = false;
@@ -907,11 +879,11 @@ int CmdHF14AMfUWrBl(const char *Cmd){
 	uint8_t data[16] = {0x00};
 	uint8_t authenticationkey[16] = {0x00};
 	uint8_t *authKeyPtr = authenticationkey;
-
+	
 	// starting with getting tagtype
 	TagTypeUL_t tagtype = GetHF14AMfU_Type();
 	if (tagtype == UL_ERROR) return -1;
-
+	
 	while(param_getchar(Cmd, cmdp) != 0x00)
 	{
 		switch(param_getchar(Cmd, cmdp))
@@ -952,11 +924,11 @@ int CmdHF14AMfUWrBl(const char *Cmd){
 		
 				if (blockNo < 0) {
 					PrintAndLog("Wrong block number");
-					errors = true;
+					errors = true;					
 				}
 				if (blockNo > maxblockno){
 					PrintAndLog("block number too large. Max block is %u/0x%02X \n", maxblockno,maxblockno);
-					errors = true;
+					errors = true;									
 				}
 				cmdp += 2;
 				break;
@@ -984,21 +956,21 @@ int CmdHF14AMfUWrBl(const char *Cmd){
 	}
 
 	if ( blockNo == -1 ) return usage_hf_mfu_wrbl();
-
+	
 	// Swap endianness 
 	if (swapEndian && hasAuthKey) authKeyPtr = SwapEndian64(authenticationkey, 16, 8);
 	if (swapEndian && hasPwdKey)  authKeyPtr = SwapEndian64(authenticationkey, 4, 4);
 
-	if ( blockNo <= 3)
+	if ( blockNo <= 3) 		
 		PrintAndLog("Special Block: %0d (0x%02X) [ %s]", blockNo, blockNo, sprint_hex(blockdata, 4));
 	else
 		PrintAndLog("Block: %0d (0x%02X) [ %s]", blockNo, blockNo, sprint_hex(blockdata, 4));
-
+	
 	//Send write Block
 	UsbCommand c = {CMD_MIFAREU_WRITEBL, {blockNo}};
 	memcpy(c.d.asBytes,blockdata,4);
 
-	if ( hasAuthKey ) {
+	if ( hasAuthKey ){
 		c.arg[1] = 1;
 		memcpy(c.d.asBytes+4,authKeyPtr,16);
 	}
@@ -1006,7 +978,7 @@ int CmdHF14AMfUWrBl(const char *Cmd){
 		c.arg[1] = 2;
 		memcpy(c.d.asBytes+4,authKeyPtr,4);
 	}
-
+	
 	clearCommandBuffer();
 	SendCommand(&c);
 	UsbCommand resp;
@@ -1016,7 +988,7 @@ int CmdHF14AMfUWrBl(const char *Cmd){
 	} else {
 		PrintAndLog("Command execute timeout");
 	}
-
+	
 	return 0;
 }
 //
@@ -1038,7 +1010,7 @@ int CmdHF14AMfURdBl(const char *Cmd){
 	// starting with getting tagtype
 	TagTypeUL_t tagtype = GetHF14AMfU_Type();
 	if (tagtype == UL_ERROR) return -1;
-
+	
 	while(param_getchar(Cmd, cmdp) != 0x00)
 	{
 		switch(param_getchar(Cmd, cmdp))
@@ -1070,28 +1042,28 @@ int CmdHF14AMfURdBl(const char *Cmd){
 			case 'b':
 			case 'B':
 				blockNo = param_get8(Cmd, cmdp+1);
-
+				
 				uint8_t maxblockno = 0;
 				for (uint8_t idx = 0; idx < MAX_UL_TYPES; idx++){
 					if (tagtype & UL_TYPES_ARRAY[idx])
 						maxblockno = UL_MEMORY_ARRAY[idx];
 				}
-
+		
 				if (blockNo < 0) {
 					PrintAndLog("Wrong block number");
-					errors = true;
+					errors = true;					
 				}
 				if (blockNo > maxblockno){
 					PrintAndLog("block number to large. Max block is %u/0x%02X \n", maxblockno,maxblockno);
-					errors = true;
+					errors = true;									
 				}
 				cmdp += 2;
 				break;
 			case 'l':
 			case 'L':
 				swapEndian = true;
-				cmdp++;
-				break;
+				cmdp++;	
+				break;				
 			default:
 				PrintAndLog("Unknown parameter '%c'", param_getchar(Cmd, cmdp));
 				errors = true;
@@ -1102,11 +1074,11 @@ int CmdHF14AMfURdBl(const char *Cmd){
 	}
 
 	if ( blockNo == -1 ) return usage_hf_mfu_rdbl();
-
+	
 	// Swap endianness 
 	if (swapEndian && hasAuthKey) authKeyPtr = SwapEndian64(authenticationkey, 16, 8);
 	if (swapEndian && hasPwdKey)  authKeyPtr = SwapEndian64(authenticationkey, 4, 4);
-
+	
 	//Read Block
 	UsbCommand c = {CMD_MIFAREU_READBL, {blockNo}};
 	if ( hasAuthKey ){
@@ -1117,7 +1089,7 @@ int CmdHF14AMfURdBl(const char *Cmd){
 		c.arg[1] = 2;
 		memcpy(c.d.asBytes,authKeyPtr,4);
 	}
-
+	
 	clearCommandBuffer();
 	SendCommand(&c);
 	UsbCommand resp;
@@ -1194,7 +1166,7 @@ int usage_hf_mfu_rdbl(void) {
 int usage_hf_mfu_wrbl(void) {
 	PrintAndLog("Write a block. It autodetects card type.\n");		
 	PrintAndLog("Usage:  hf mfu wrbl b <block number> d <data> k <key> l\n");
-	PrintAndLog("  Options:");
+	PrintAndLog("  Options:");	
 	PrintAndLog("  b <no>   : block to write");
 	PrintAndLog("  d <data> : block data - (8 hex symbols)");
 	PrintAndLog("  k <key>  : (optional) key for authentication [UL-C 16bytes, EV1/NTAG 4bytes]");
@@ -1381,11 +1353,11 @@ int CmdHF14AMfUDump(const char *Cmd){
 		}
 		switch(i){
 			case 3: tmplockbit = bit[4]; break;
-			case 4: tmplockbit = bit[3]; break;
-			case 5: tmplockbit = bit[2]; break;
-			case 6: tmplockbit = bit[1]; break;
-			case 7: tmplockbit = bit[0]; break;
-			case 8: tmplockbit = bit[15]; break;
+			case 4:	tmplockbit = bit[3]; break;
+			case 5:	tmplockbit = bit[2]; break;
+			case 6:	tmplockbit = bit[1]; break;
+			case 7:	tmplockbit = bit[0]; break;
+			case 8:	tmplockbit = bit[15]; break;
 			case 9: tmplockbit = bit[14]; break;
 			case 10: tmplockbit = bit[13]; break;
 			case 11: tmplockbit = bit[12]; break;
@@ -1596,10 +1568,10 @@ int CmdTestDES(const char * cmd)
 //
 int CmdHF14AMfucSetPwd(const char *Cmd){
 
-	uint8_t pwd[16] = {0x00};
+	uint8_t pwd[16] = {0x00};	
 	
 	char cmdp = param_getchar(Cmd, 0);
-	
+
 	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') {	
 		PrintAndLog("Usage:  hf mfu setpwd <password (32 hex symbols)>");
 		PrintAndLog("       [password] - (32 hex symbols)");
@@ -1671,7 +1643,7 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 		PrintAndLog("Command execute timeout");
 		return 2;
 	}
-	
+
 	// save old block2.
 	uint8_t oldblock2[4] = {0x00};
 	memcpy(resp.d.asBytes, oldblock2, 4);
@@ -1689,7 +1661,7 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 		PrintAndLog("Command execute timeout");
 		return 3;
 	}
-	
+
 	// block 1.
 	c.arg[0] = 1;
 	c.d.asBytes[0] = uid[3];
@@ -1720,10 +1692,10 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 }
 
 int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
-
+	
 	uint8_t iv[8] = { 0x00 };
 	uint8_t block = 0x07;
-
+	
 	// UL-EV1
 	//04 57 b6 e2 05 3f 80 UID
 	//4a f8 4b 19   PWD
@@ -1737,14 +1709,14 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	
 	uint8_t mix[8] = { 0x00 };
 	uint8_t divkey[8] = { 0x00 };
-
+	
 	memcpy(mix, mifarekeyA, 4);
-
+	
 	mix[4] = mifarekeyA[4] ^ uid[0];
 	mix[5] = mifarekeyA[5] ^ uid[1];
 	mix[6] = block ^ uid[2];
 	mix[7] = uid[3];
-
+	
 	des3_context ctx = { 0x00 };
 	des3_set2key_enc(&ctx, masterkey);
 
@@ -1763,9 +1735,9 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	PrintAndLog("Mifare key   :\t %s", sprint_hex(mifarekeyA, sizeof(mifarekeyA)));
 	PrintAndLog("Message      :\t %s", sprint_hex(mix, sizeof(mix)));
 	PrintAndLog("Diversified key: %s", sprint_hex(divkey+1, 6));
-
+		
 	PrintAndLog("\n DES version");
-
+	
 	for (int i=0; i < sizeof(mifarekeyA); ++i){
 		dkeyA[i] = (mifarekeyA[i] << 1) & 0xff;
 		dkeyA[6] |=  ((mifarekeyA[i] >> 7) & 1) << (i+1);
@@ -1783,7 +1755,7 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	memcpy(dmkey+8, dkeyB, 8);
 	memcpy(dmkey+16, dkeyA, 8);
 	memset(iv, 0x00, 8);
-
+	
 	des3_set3key_enc(&ctx, dmkey);
 
 	des3_crypt_cbc(&ctx  // des3_context
@@ -1828,7 +1800,7 @@ static command_t CommandTable[] =
 	{"info",	CmdHF14AMfUInfo,	0, "Tag information"},
 	{"dump",	CmdHF14AMfUDump,	0, "Dump Ultralight / Ultralight-C / NTAG tag to binary file"},
 	{"rdbl",	CmdHF14AMfURdBl,	0, "Read block"},
-	{"wrbl",	CmdHF14AMfUWrBl,	0, "Write block"},
+	{"wrbl",	CmdHF14AMfUWrBl,	0, "Write block"},    
 	{"cauth",	CmdHF14AMfucAuth,	0, "Authentication    - Ultralight C"},
 	{"setpwd",	CmdHF14AMfucSetPwd, 1, "Set 3des password - Ultralight-C"},
 	{"setuid",	CmdHF14AMfucSetUid, 1, "Set UID - MAGIC tags only"},

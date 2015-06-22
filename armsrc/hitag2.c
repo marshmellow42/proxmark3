@@ -16,10 +16,10 @@
 // (c) 2012 Roel Verdult
 //-----------------------------------------------------------------------------
 
-#include "proxmark3.h"
+#include "../include/proxmark3.h"
 #include "apps.h"
 #include "util.h"
-#include "hitag2.h"
+#include "../include/hitag2.h"
 #include "string.h"
 #include "BigBuf.h"
 
@@ -973,7 +973,7 @@ void SimulateHitagTag(bool tag_mem_supplied, byte_t* data) {
 	AT91C_BASE_PMC->PMC_PCER = (1 << AT91C_ID_TC1);
 	AT91C_BASE_PIOA->PIO_BSR = GPIO_SSC_FRAME;
 	
-  // Disable timer during configuration	
+    // Disable timer during configuration	
 	AT91C_BASE_TC1->TC_CCR = AT91C_TC_CLKDIS;
 
 	// Capture mode, default timer source = MCK/2 (TIMER_CLOCK1), TIOA is external trigger,

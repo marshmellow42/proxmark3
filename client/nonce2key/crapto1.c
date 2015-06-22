@@ -1,21 +1,21 @@
 /*  crapto1.c
 
-	This program is free software; you can redistribute it and/or
-	modify it under the terms of the GNU General Public License
-	as published by the Free Software Foundation; either version 2
-	of the License, or (at your option) any later version.
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
 
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 51 Franklin Street, Fifth Floor,
-	Boston, MA  02110-1301, US$
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor,
+    Boston, MA  02110-1301, US$
 
-	Copyright (C) 2008-2008 bla <blapost@gmail.com>
+    Copyright (C) 2008-2008 bla <blapost@gmail.com>
 */
 #include "crapto1.h"
 #include <stdlib.h>
@@ -24,9 +24,9 @@
 static uint8_t filterlut[1 << 20];
 static void __attribute__((constructor)) fill_lut()
 {
-		uint32_t i;
-		for(i = 0; i < 1 << 20; ++i)
-				filterlut[i] = filter(i);
+        uint32_t i;
+        for(i = 0; i < 1 << 20; ++i)
+                filterlut[i] = filter(i);
 }
 #define filter(x) (filterlut[(x) & 0xfffff])
 #endif
@@ -147,7 +147,7 @@ extend_table(uint32_t *tbl, uint32_t **end, int bit, int m1, int m2, uint32_t in
 			*p ^= in;
 		} else {										// drop
 			*p-- = *(*end)--;
-		}
+	}
 	}
 
 }
@@ -209,7 +209,7 @@ recover(uint32_t *o_head, uint32_t *o_tail, uint32_t oks,
 
 	for (int i = bucket_info.numbuckets - 1; i >= 0; i--) {
 		sl = recover(bucket_info.bucket_info[1][i].head, bucket_info.bucket_info[1][i].tail, oks,
-					 bucket_info.bucket_info[0][i].head, bucket_info.bucket_info[0][i].tail, eks,
+				     bucket_info.bucket_info[0][i].head, bucket_info.bucket_info[0][i].tail, eks,
 					 rem, sl, in, bucket);
 	}
 
@@ -251,7 +251,6 @@ struct Crypto1State* lfsr_recovery32(uint32_t ks2, uint32_t in)
 			}
 		}
 
-
 	// initialize statelists: add all possible states which would result into the rightmost 2 bits of the keystream
 	for(i = 1 << 20; i >= 0; --i) {
 		if(filter(i) == (oks & 1))
@@ -272,9 +271,7 @@ struct Crypto1State* lfsr_recovery32(uint32_t ks2, uint32_t in)
 
 	in = (in >> 16 & 0xff) | (in << 16) | (in & 0xff00);		// Byte swapping
 
-	recover(odd_head, odd_tail, oks,
-		even_head, even_tail, eks, 11, statelist, in << 1, bucket);
-
+	recover(odd_head, odd_tail, oks, even_head, even_tail, eks, 11, statelist, in << 1, bucket);
 
 out:
 	free(odd_head);
@@ -484,7 +481,7 @@ uint32_t *lfsr_prefix_ks(uint8_t ks[8], int isodd)
  */
 static struct Crypto1State*
 brute_top(uint32_t prefix, uint32_t rresp, unsigned char parities[8][8],
-		  uint32_t odd, uint32_t even, struct Crypto1State* sl, uint8_t no_chk)
+          uint32_t odd, uint32_t even, struct Crypto1State* sl, uint8_t no_chk)
 {
 	struct Crypto1State s;
 	uint32_t ks1, nr, ks2, rr, ks3, good, c;
@@ -536,8 +533,7 @@ brute_top(uint32_t prefix, uint32_t rresp, unsigned char parities[8][8],
  * It returns a zero terminated list of possible cipher states after the
  * tag nonce was fed in
  */
-struct Crypto1State*
-lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], uint8_t no_par)
+struct Crypto1State* lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], uint8_t no_par)
 {
 	struct Crypto1State *statelist, *s;
 	uint32_t *odd, *even, *o, *e, top;
@@ -548,10 +544,10 @@ lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], 
 	statelist = malloc((sizeof *statelist) << 21);	//how large should be?
 	if(!statelist || !odd || !even)
 	{
-				free(statelist);
-				free(odd);
-				free(even);
-				return 0;
+		free(statelist);
+		free(odd);
+		free(even);
+		return 0;
 	}
 
 	s = statelist;
@@ -571,3 +567,66 @@ lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], 
 
 	return statelist;
 }
+
+/*
+struct Crypto1State* lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], uint8_t no_par, uint32_t nt, uint32_t uid)
+{
+    long long int amount = 0;
+    struct Crypto1State *statelist, *s;
+    uint32_t *odd, *even, *o, *e, top;
+
+    odd = lfsr_prefix_ks(ks, 1);
+    even = lfsr_prefix_ks(ks, 0);
+
+    s = statelist = malloc((sizeof *statelist) << 20);
+    if(!s || !odd || !even) {
+		free(odd);
+		free(even);
+		free(statelist);
+		return 0;
+    }
+
+    char filename[50] = "archivo.txt";
+    sprintf(filename, "logs/%x.txt", nt);
+    PrintAndLog("Name: %s\n", filename);
+    FILE *file = fopen(filename,"w+");
+	if ( !file ) {
+		s->odd = s->even = 0;
+		free(odd);
+		free(even);
+		PrintAndLog("Failed to create file");
+		return 0;
+	}
+    PrintAndLog("Creating file... ");
+	uint32_t xored = uid^nt;
+	
+    int lastOdd = 0;
+    for(o = odd; *o + 1; ++o)
+        for(e = even; *e + 1; ++e)
+            for(top = 0; top < 64; ++top) {
+                *o += 1 << 21;
+                *e += (!(top & 7) + 1) << 21;
+
+                //added by MG
+                if(lastOdd != statelist->odd){
+					// Here I create a temporal crypto1 state, 
+					// where I load the odd and even state and work with it,
+					// in order not to interfere with regular mechanism, This is what I save to file
+					struct Crypto1State *state;
+                    lastOdd = state->odd = statelist->odd; state->even = statelist->even;
+                    lfsr_rollback_word(state,xored,0);
+                    fprintf(file,"%x %x \n",state->odd,state->even);
+                    amount++;
+                }
+                //s = check_pfx_parity(pfx, rr, par, *o, *e, s); //This is not useful at all when attacking chineese cards
+				s = brute_top(pfx, rr, par, *o, *e, s, no_par); 
+            }
+
+	PrintAndLog("File created, amount %u\n",amount);
+	fclose(file);
+	s->odd = s->even = 0;
+	free(odd);
+	free(even);
+    return statelist;
+}
+ */

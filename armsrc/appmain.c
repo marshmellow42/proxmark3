@@ -180,7 +180,7 @@ void MeasureAntennaTuning(void)
 	int i, adcval = 0, peak = 0, peakv = 0, peakf = 0; //ptr = 0 
 	int vLf125 = 0, vLf134 = 0, vHf = 0;	// in mV
 
-	LED_B_ON();
+  LED_B_ON();
 
 /*
  * Sweeps the useful LF range of the proxmark from
@@ -212,7 +212,7 @@ void MeasureAntennaTuning(void)
 
 	for (i=18; i >= 0; i--) LF_Results[i] = 0;
 	
-	LED_A_ON();
+  LED_A_ON();
 	// Let the FPGA drive the high-frequency antenna around 13.56 MHz.
   	FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
 	FpgaWriteConfWord(FPGA_MAJOR_MODE_HF_READER_RX_XCORR);
@@ -221,9 +221,9 @@ void MeasureAntennaTuning(void)
 
 	cmd_send(CMD_MEASURED_ANTENNA_TUNING, vLf125 | (vLf134<<16), vHf, peakf | (peakv<<16), LF_Results, 256);
 	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-	LED_A_OFF();
-	LED_B_OFF();
-	return;
+  LED_A_OFF();
+  LED_B_OFF();
+  return;
 }
 
 void MeasureAntennaTuningHf(void)
@@ -249,55 +249,6 @@ void MeasureAntennaTuningHf(void)
 
 }
 
-
-void SimulateTagHfListen(void)
-{
-	// ToDo: historically this used the free buffer, which was 2744 Bytes long. 
-	// There might be a better size to be defined:
-	#define HF_14B_SNOOP_BUFFER_SIZE 2744
-	uint8_t *dest = BigBuf_malloc(HF_14B_SNOOP_BUFFER_SIZE);
-	uint8_t v = 0;
-	int i;
-	int p = 0;
-
-	// We're using this mode just so that I can test it out; the simulated
-	// tag mode would work just as well and be simpler.
-	FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
-	FpgaWriteConfWord(FPGA_MAJOR_MODE_HF_READER_RX_XCORR | FPGA_HF_READER_RX_XCORR_848_KHZ | FPGA_HF_READER_RX_XCORR_SNOOP);
-
-	// We need to listen to the high-frequency, peak-detected path.
-	SetAdcMuxFor(GPIO_MUXSEL_HIPKD);
-
-	FpgaSetupSsc();
-
-	i = 0;
-	for(;;) {
-		if(AT91C_BASE_SSC->SSC_SR & (AT91C_SSC_TXRDY)) {
-			AT91C_BASE_SSC->SSC_THR = 0xff;
-		}
-		if(AT91C_BASE_SSC->SSC_SR & (AT91C_SSC_RXRDY)) {
-			uint8_t r = (uint8_t)AT91C_BASE_SSC->SSC_RHR;
-
-			v <<= 1;
-			if(r & 1) {
-				v |= 1;
-			}
-			p++;
-
-			if(p >= 8) {
-				dest[i] = v;
-				v = 0;
-				p = 0;
-				i++;
-
-				if(i >= HF_14B_SNOOP_BUFFER_SIZE) {
-					break;
-				}
-			}
-		}
-	}
-	DbpString("simulate tag (now type bitsamples)");
-}
 
 void ReadMem(int addr)
 {
@@ -370,7 +321,7 @@ void SamyRun()
 	for (;;)
 	{
 		usb_poll();
-    WDT_HIT();
+		WDT_HIT();
 
 		// Was our button held down or pressed?
 		int button_pressed = BUTTON_HELD(1000);
@@ -640,7 +591,7 @@ void UsbPacketReceived(uint8_t *packet, int len)
 {
 	UsbCommand *c = (UsbCommand *)packet;
 
-//  Dbprintf("received %d bytes, with command: 0x%04x and args: %d %d %d",len,c->cmd,c->arg[0],c->arg[1],c->arg[2]);
+  //Dbprintf("received %d bytes, with command: 0x%04x and args: %d %d %d",len,c->cmd,c->arg[0],c->arg[1],c->arg[2]);
   
 	switch(c->cmd) {
 #ifdef WITH_LF
@@ -782,20 +733,17 @@ void UsbPacketReceived(uint8_t *packet, int len)
 #endif
 
 #ifdef WITH_ISO14443b
-		case CMD_ACQUIRE_RAW_ADC_SAMPLES_ISO_14443:
-			AcquireRawAdcSamplesIso14443(c->arg[0]);
-			break;
 		case CMD_READ_SRI512_TAG:
-			ReadSTMemoryIso14443(0x0F);
+			ReadSTMemoryIso14443b(0x0F);
 			break;
 		case CMD_READ_SRIX4K_TAG:
-			ReadSTMemoryIso14443(0x7F);
+			ReadSTMemoryIso14443b(0x7F);
 			break;
-		case CMD_SNOOP_ISO_14443:
-			SnoopIso14443();
+		case CMD_SNOOP_ISO_14443B:
+			SnoopIso14443b();
 			break;
-		case CMD_SIMULATE_TAG_ISO_14443:
-			SimulateIso14443Tag();
+		case CMD_SIMULATE_TAG_ISO_14443B:
+			SimulateIso14443bTag();
 			break;
 		case CMD_ISO_14443B_COMMAND:
 			SendRawCommand14443B(c->arg[0],c->arg[1],c->arg[2],c->d.asBytes);
@@ -804,7 +752,7 @@ void UsbPacketReceived(uint8_t *packet, int len)
 
 #ifdef WITH_ISO14443a
 		case CMD_SNOOP_ISO_14443a:
-			SnoopIso14443a(c->arg[0]);
+			SniffIso14443a(c->arg[0]);
 			break;
 		case CMD_READER_ISO_14443a:
 			ReaderIso14443a(c);
@@ -818,7 +766,7 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			break;
 			
 		case CMD_READER_MIFARE:
-			ReaderMifare(c->arg[0]);
+            ReaderMifare(c->arg[0]);
 			break;
 		case CMD_MIFARE_READBL:
 			MifareReadBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
@@ -890,6 +838,28 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			SniffMifare(c->arg[0]);
 			break;
 
+		//mifare desfire
+		case CMD_MIFARE_DESFIRE_READBL:	break;
+		case CMD_MIFARE_DESFIRE_WRITEBL: break;
+		case CMD_MIFARE_DESFIRE_AUTH1:
+			MifareDES_Auth1(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
+			break;
+		case CMD_MIFARE_DESFIRE_AUTH2:
+			//MifareDES_Auth2(c->arg[0],c->d.asBytes);
+			break;
+		case CMD_MIFARE_DES_READER:
+			//readermifaredes(c->arg[0], c->arg[1], c->d.asBytes);
+			break;
+		case CMD_MIFARE_DESFIRE_INFO:
+			MifareDesfireGetInformation();
+			break;
+		case CMD_MIFARE_DESFIRE:
+			MifareSendCommand(c->arg[0], c->arg[1], c->d.asBytes);
+			break;
+
+		case CMD_MIFARE_COLLECT_NONCES:
+			MifareCollectNonces(c->arg[0], c->arg[1]);
+			break;
 #endif
 
 #ifdef WITH_ICLASS
@@ -904,16 +874,12 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			ReaderIClass(c->arg[0]);
 			break;
 		case CMD_READER_ICLASS_REPLAY:
-		    ReaderIClass_Replay(c->arg[0], c->d.asBytes);
+		        ReaderIClass_Replay(c->arg[0], c->d.asBytes);
 			break;
 	case CMD_ICLASS_EML_MEMSET:
 			emlSet(c->d.asBytes,c->arg[0], c->arg[1]);
 			break;
 #endif
-
-		case CMD_SIMULATE_TAG_HF_LISTEN:
-			SimulateTagHfListen();
-			break;
 
 		case CMD_BUFF_CLEAR:
 			BigBuf_Clear();
@@ -1037,7 +1003,7 @@ void  __attribute__((noreturn)) AppMain(void)
 	LED_A_OFF();
 
 	// Init USB device
-  usb_enable();
+	usb_enable();
 
 	// The FPGA gets its clock from us from PCK0 output, so set that up.
 	AT91C_BASE_PIOA->PIO_BSR = GPIO_PCK0;
@@ -1067,12 +1033,12 @@ void  __attribute__((noreturn)) AppMain(void)
 	size_t rx_len;
   
 	for(;;) {
-    if (usb_poll()) {
-      rx_len = usb_read(rx,sizeof(UsbCommand));
-      if (rx_len) {
-        UsbPacketReceived(rx,rx_len);
-      }
-    }
+		if (usb_poll()) {
+			rx_len = usb_read(rx,sizeof(UsbCommand));
+			if (rx_len) {
+				UsbPacketReceived(rx,rx_len);
+			}
+		}
 		WDT_HIT();
 
 #ifdef WITH_LF

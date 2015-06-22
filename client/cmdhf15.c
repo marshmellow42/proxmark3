@@ -175,9 +175,9 @@ const productName uidmapping[] = {
 	{ 0xE02E000000000000LL, 16, "Broadcom Corporation USA" },
 	{ 0xE02F000000000000LL, 16, "MStar Semiconductor, Inc Taiwan, ROC" },
 	{ 0xE030000000000000LL, 16, "BeeDar Technology Inc. USA" },
-	{ 0xE031000000000000LL, 16, " RFIDsec Denmark" },
-	{ 0xE032000000000000LL, 16, " Schweizer Electronic AG Germany" },
-	{ 0xE033000000000000LL, 16, " AMIC Technology Corp Taiwan" }, 
+	{ 0xE031000000000000LL, 16, "RFIDsec Denmark" },
+	{ 0xE032000000000000LL, 16, "Schweizer Electronic AG Germany" },
+	{ 0xE033000000000000LL, 16, "AMIC Technology Corp Taiwan" }, 
 	{ 0xE034000000000000LL, 16, "Mikron JSC Russia" },
 	{ 0xE035000000000000LL, 16, "Fraunhofer Institute for Photonic Microsystems Germany" },
 	{ 0xE036000000000000LL, 16, "IDS Microchip AG Switzerland" },
@@ -682,9 +682,9 @@ int CmdHF15CmdRaw (const char *cmd) {
  */
 int prepareHF15Cmd(char **cmd, UsbCommand *c, uint8_t iso15cmd[], int iso15cmdlen) {
 	int temp;
-	uint8_t *req=c->d.asBytes;
+	uint8_t *req = c->d.asBytes;
 	uint8_t uid[8] = {0x00};
-	uint32_t reqlen=0;
+	uint32_t reqlen = 0;
 
 	// strip
 	while (**cmd==' ' || **cmd=='\t') (*cmd)++;
@@ -777,10 +777,10 @@ int CmdHF15CmdSysinfo(const char *Cmd) {
 	UsbCommand resp;
 	uint8_t *recv;
 	UsbCommand c = {CMD_ISO_15693_COMMAND, {0, 1, 1}}; // len,speed,recv?
-	uint8_t *req=c.d.asBytes;
-	int reqlen=0;
+	uint8_t *req = c.d.asBytes;
+	int reqlen = 0;
 	char cmdbuf[100];
-	char *cmd=cmdbuf;
+	char *cmd = cmdbuf;
 	char output[2048]="";
 	int i;
 	
@@ -802,7 +802,7 @@ int CmdHF15CmdSysinfo(const char *Cmd) {
 	}	
 	
 	prepareHF15Cmd(&cmd, &c,(uint8_t[]){ISO15_CMD_SYSINFO},1);	
-	reqlen=c.arg[0];
+	reqlen = c.arg[0];
 	
 	reqlen=AddCrc(req,reqlen);
 	c.arg[0]=reqlen;

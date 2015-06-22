@@ -13,7 +13,8 @@
 
 #include "iso14443a.h"
 #include "epa.h"
-#include "cmd.h"
+#include "../common/cmd.h"
+
 
 // Protocol and Parameter Selection Request
 // use regular (1x) speed in both directions
@@ -224,7 +225,7 @@ static void EPA_PACE_Collect_Nonce_Abort(uint8_t step, int func_return)
 	EPA_Finish();
 	
 	// send the USB packet
-  cmd_send(CMD_ACK,step,func_return,0,0,0);
+	cmd_send(CMD_ACK,step,func_return,0,0,0);
 }
 
 //-----------------------------------------------------------------------------
@@ -252,8 +253,9 @@ void EPA_PACE_Collect_Nonce(UsbCommand *c)
 	
 	// set up communication
 	func_return = EPA_Setup();
-	if (func_return != 0) {
+	if (func_return != 0) {	
 		EPA_PACE_Collect_Nonce_Abort(1, func_return);
+		Dbprintf("epa: setup fucked up! %d", func_return);
 		return;
 	}
 
@@ -263,10 +265,13 @@ void EPA_PACE_Collect_Nonce(UsbCommand *c)
 	int card_access_length = EPA_Read_CardAccess(card_access, 256);
 	// the response has to be at least this big to hold the OID
 	if (card_access_length < 18) {
+		Dbprintf("epa: Too small!");
 		EPA_PACE_Collect_Nonce_Abort(2, card_access_length);
 		return;
 	}
 
+	Dbprintf("epa: foo!");
+	
 	// this will hold the PACE info of the card
 	pace_version_info_t pace_version_info;
 	// search for the PACE OID
@@ -277,6 +282,8 @@ void EPA_PACE_Collect_Nonce(UsbCommand *c)
 		EPA_PACE_Collect_Nonce_Abort(3, func_return);
 		return;
 	}
+	
+	Dbprintf("epa: bar!");
 	
 	// initiate the PACE protocol
 	// use the CAN for the password since that doesn't change
@@ -299,7 +306,7 @@ void EPA_PACE_Collect_Nonce(UsbCommand *c)
 	// save received information
 //	ack->arg[1] = func_return;
 //	memcpy(ack->d.asBytes, nonce, func_return);
-  cmd_send(CMD_ACK,0,func_return,0,nonce,func_return);
+	cmd_send(CMD_ACK,0,func_return,0,nonce,func_return);
 }
 
 //-----------------------------------------------------------------------------
@@ -422,7 +429,7 @@ int EPA_Setup()
 
 	// power up the field
 	iso14443a_setup(FPGA_HF_ISO14443A_READER_MOD);
-
+	
 	// select the card
 	return_code = iso14443a_select_card(uid, &card_select_info, NULL);
 	if (return_code != 1) {

@@ -9,6 +9,7 @@
 //-----------------------------------------------------------------------------
 
 #include "cmdhfmf.h"
+#include "nonce2key/nonce2key.h"
 
 static int CmdHelp(const char *Cmd);
 
@@ -781,8 +782,8 @@ int CmdHF14AMfChk(const char *Cmd)
 		PrintAndLog("Usage:  hf mf chk <block number>|<*card memory> <key type (A/B/?)> [t|d] [<key (12 hex symbols)>] [<dic (*.dic)>]");
 		PrintAndLog("          * - all sectors");
 		PrintAndLog("card memory - 0 - MINI(320 bytes), 1 - 1K, 2 - 2K, 4 - 4K, <other> - 1K");
-		PrintAndLog("d - write keys to binary file\n");
-		PrintAndLog("t - write keys to emulator memory");
+		PrintAndLog("d - write keys to binary file");
+		PrintAndLog("t - write keys to emulator memory\n");
 		PrintAndLog("      sample: hf mf chk 0 A 1234567890ab keys.dic");
 		PrintAndLog("              hf mf chk *1 ? t");
 		PrintAndLog("              hf mf chk *1 ? d");
@@ -1011,8 +1012,10 @@ int CmdHF14AMf1kSim(const char *Cmd)
 	uint8_t uid[7] = {0, 0, 0, 0, 0, 0, 0};
 	uint8_t exitAfterNReads = 0;
 	uint8_t flags = 0;
-
+	
 	uint8_t cmdp = param_getchar(Cmd, 0);
+
+	clearCommandBuffer();
 	
 	if (cmdp == 'h' || cmdp == 'H') {
 		PrintAndLog("Usage:  hf mf sim  u <uid (8 hex symbols)> n <numreads> i x");
@@ -1063,15 +1066,42 @@ int CmdHF14AMf1kSim(const char *Cmd)
 	SendCommand(&c);
 
 	if(flags & FLAG_INTERACTIVE)
-	{
-		UsbCommand resp;
+	{		
 		PrintAndLog("Press pm3-button to abort simulation");
-		while(! WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
-			//We're waiting only 1.5 s at a time, otherwise we get the
-			// annoying message about "Waiting for a response... "
+		
+		uint8_t data[40];
+		uint8_t key[6];
+
+		UsbCommand resp;		
+		while(!ukbhit() ){
+			if ( WaitForResponseTimeout(CMD_ACK,&resp,1500) ) {
+				if ( (resp.arg[0] & 0xffff) == CMD_SIMULATE_MIFARE_CARD ){
+					memset(data, 0x00, sizeof(data));
+					memset(key, 0x00, sizeof(key));
+					int len = (resp.arg[1] > sizeof(data)) ? sizeof(data) : resp.arg[1];
+					
+					memcpy(data, resp.d.asBytes, len);
+					
+					uint64_t corr_uid = 0;
+					if ( memcmp(data, "\x00\x00\x00\x00", 4) == 0 ) {
+						corr_uid = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+					}
+					else {
+						corr_uid |= (uint64_t)data[2] << 48; 
+						corr_uid |= (uint64_t)data[1] << 40; 
+						corr_uid |= (uint64_t)data[0] << 32;
+						corr_uid |= data[7] << 24;
+						corr_uid |= data[6] << 16;
+						corr_uid |= data[5] << 8;
+						corr_uid |= data[4];
+					}
+					tryMfk32(corr_uid, data, key);
+					//tryMfk64(corr_uid, data, key);
+					PrintAndLog("--");
+				}
+			}
 		}
 	}
-	
 	return 0;
 }
 
@@ -1750,10 +1780,12 @@ int CmdHF14AMfCSave(const char *Cmd) {
 			// get filename
 			if (mfCGetBlock(0, buf, CSETBLOCK_SINGLE_OPER)) {
 				PrintAndLog("Cant get block: %d", 0);
-				return 1;
+				len = sprintf(fnameptr, "dump");
+				fnameptr += len;
+			} else {
+				for (j = 0; j < 7; j++, fnameptr += 2)
+					sprintf(fnameptr, "%02x", buf[j]); 
 			}
-			for (j = 0; j < 7; j++, fnameptr += 2)
-				sprintf(fnameptr, "%02x", buf[j]); 
 		} else {
 			memcpy(filename, Cmd, len);
 			fnameptr += len;

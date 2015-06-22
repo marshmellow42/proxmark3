@@ -109,7 +109,7 @@ NXP/Philips CUSTOM COMMANDS
 #define ISO14443A_CMD_WUPA       0x52
 #define ISO14443A_CMD_ANTICOLL_OR_SELECT     0x93
 #define ISO14443A_CMD_ANTICOLL_OR_SELECT_2   0x95
-#define ISO14443A_CMD_WRITEBLOCK 0xA0 // or 0xA2 ?
+#define ISO14443A_CMD_WRITEBLOCK 0xA0
 #define ISO14443A_CMD_HALT       0x50
 #define ISO14443A_CMD_RATS       0xE0
 
@@ -128,16 +128,14 @@ NXP/Philips CUSTOM COMMANDS
 #define MIFARE_ULC_AUTH_1       0x1A
 #define MIFARE_ULC_AUTH_2       0xAF
 
-#define MIFARE_ULEV1_AUTH       0x1B
-#define MIFARE_ULEV1_VERSION    0x60
-#define MIFARE_ULEV1_FASTREAD   0x3A
-//#define MIFARE_ULEV1_WRITE      0xA2
-//#define MIFARE_ULEV1_COMP_WRITE 0xA0
-#define MIFARE_ULEV1_READ_CNT   0x39
-#define MIFARE_ULEV1_INCR_CNT   0xA5
-#define MIFARE_ULEV1_READSIG    0x3C
-#define MIFARE_ULEV1_CHECKTEAR  0x3E
-#define MIFARE_ULEV1_VCSL       0x4B
+#define MIFARE_ULEV1_AUTH		0x1B
+#define MIFARE_ULEV1_VERSION	0x60
+#define MIFARE_ULEV1_FASTREAD	0x3A
+#define MIFARE_ULEV1_READ_CNT	0x39
+#define MIFARE_ULEV1_INCR_CNT	0xA5
+#define MIFARE_ULEV1_READSIG	0x3C
+#define MIFARE_ULEV1_CHECKTEAR	0x3E
+#define MIFARE_ULEV1_VCSL		0x4B
 
 /**
 06 00 = INITIATE
@@ -180,9 +178,25 @@ NXP/Philips CUSTOM COMMANDS
 #define ISO15693_READ_MULTI_SECSTATUS 0x2C
 
 
+// Topaz command set:
+#define	TOPAZ_REQA						0x26	// Request
+#define	TOPAZ_WUPA						0x52	// WakeUp
+#define	TOPAZ_RID						0x78	// Read ID
+#define	TOPAZ_RALL						0x00	// Read All (all bytes)
+#define	TOPAZ_READ						0x01	// Read (a single byte)
+#define	TOPAZ_WRITE_E					0x53	// Write-with-erase (a single byte)
+#define	TOPAZ_WRITE_NE					0x1a	// Write-no-erase (a single byte)
+// additional commands for Dynamic Memory Model
+#define TOPAZ_RSEG						0x10	// Read segment
+#define TOPAZ_READ8						0x02	// Read (eight bytes)
+#define TOPAZ_WRITE_E8					0x54	// Write-with-erase (eight bytes)
+#define TOPAZ_WRITE_NE8					0x1B	// Write-no-erase (eight bytes)
+
+
 #define ISO_14443A 0
 #define ICLASS     1
 #define ISO_14443B 2
+#define TOPAZ		3
 
 //-- Picopass fuses
 #define FUSE_FPERS   0x80

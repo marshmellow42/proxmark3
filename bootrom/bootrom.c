@@ -217,7 +217,7 @@ static void flash_mode(int externally_entered)
 
 		if(!externally_entered && !BUTTON_PRESS()) {
 			/* Perform a reset to leave flash mode */
-      usb_disable();
+		usb_disable();
 			LED_B_ON();
 			AT91C_BASE_RSTC->RSTC_RCR = RST_CONTROL_KEY | AT91C_RSTC_PROCRST;
 			for(;;);

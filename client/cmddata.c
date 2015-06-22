@@ -500,10 +500,9 @@ int ASKbiphaseDemod(const char *Cmd, bool verbose)
 	//ask raw demod GraphBuffer first
 	int offset=0, clk=0, invert=0, maxErr=0;
 	sscanf(Cmd, "%i %i %i %i", &offset, &clk, &invert, &maxErr);
-
-	uint8_t BitStream[MAX_DEMOD_BUF_LEN];	  
+	
+	uint8_t BitStream[MAX_DEMOD_BUF_LEN];
 	size_t size = getFromGraphBuf(BitStream);	  
-	//invert here inverts the ask raw demoded bits which has no effect on the demod, but we need the pointer
 	int errCnt = askdemod(BitStream, &size, &clk, &invert, maxErr, 0, 0);  
 	if ( errCnt < 0 || errCnt > maxErr ) {   
 		if (g_debugMode) PrintAndLog("DEBUG: no data or error found %d, clock: %d", errCnt, clk);  
@@ -1462,6 +1461,17 @@ int CmdFSKdemodPyramid(const char *Cmd)
 // NATIONAL CODE, ICAR database
 // COUNTRY CODE (ISO3166) or http://cms.abvma.ca/uploads/ManufacturersISOsandCountryCodes.pdf
 // FLAG (animal/non-animal)
+/*
+38 IDbits   
+10 country code 
+1 extra app bit
+14 reserved bits
+1 animal bit
+16 ccitt CRC chksum over 64bit ID CODE.
+24 appli bits.
+
+-- sample: 985121004515220  [ 37FF65B88EF94 ]
+*/
 int CmdFDXBdemodBI(const char *Cmd){
 
 	int invert = 1;
@@ -1482,13 +1492,13 @@ int CmdFDXBdemodBI(const char *Cmd){
 		if (g_debugMode) PrintAndLog("Error BiphaseRawDecode: %d", errCnt);
 		return 0;
 	} 
-
+	
 	int preambleIndex = FDXBdemodBI(BitStream, &size);
 	if (preambleIndex < 0){
 		if (g_debugMode) PrintAndLog("Error FDXBDemod , no startmarker found :: %d",preambleIndex);
 		return 0;
 	}
-
+	
 	setDemodBuf(BitStream, 128, preambleIndex);
 
 	// remove but don't verify parity. (pType = 2)
@@ -1947,7 +1957,7 @@ typedef struct {
 	uint8_t * buffer;
 	uint32_t numbits;
 	uint32_t position;
-}BitstreamOut;
+} BitstreamOut;
 
 bool _headBit( BitstreamOut *stream)
 {

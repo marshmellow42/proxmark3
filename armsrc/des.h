@@ -96,6 +96,9 @@ void tdes_enc(void* out, const void* in, const void* key);
  * \param key pointer to the key (192 bit = 24 byte)
  */
  void tdes_dec(void* out, const void* in, const void* key);
+ 
+ void tdes_2key_enc(void* out, const void* in, size_t length, const void* key, unsigned char iv[8]);
+ void tdes_2key_dec(void* out, const void* in, size_t length, const void* key, unsigned char iv[8]);
 
  void tdes_2key_enc(void* out, const void* in, size_t length, const void* key, unsigned char iv[8]);
  void tdes_2key_dec(void* out, const void* in, size_t length, const void* key, unsigned char iv[8]);

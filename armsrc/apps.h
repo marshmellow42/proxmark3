@@ -14,11 +14,19 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "common.h"
-#include "hitag2.h"
-#include "mifare.h"
+#include <stdlib.h>
+#include <sys/types.h>
+#include <string.h>
+#include <strings.h>
 #include "../common/crc32.h"
+#include "../common/lfdemod.h"
 #include "BigBuf.h"
+#include "../include/hitag2.h"
+#include "../include/mifare.h"
+//#include "des.h"
+//#include "aes.h"
+#include "desfire.h"
+
 
 extern const uint8_t OddByteParity[256];
 extern int rsamples;   // = 0;
@@ -133,6 +141,7 @@ void CopyIndala224toT55x7(int uid1, int uid2, int uid3, int uid4, int uid5, int 
 void T55xxWriteBlock(uint32_t Data, uint32_t Block, uint32_t Pwd, uint8_t PwdMode);
 void T55xxReadBlock(uint32_t Block, uint32_t Pwd, uint8_t PwdMode );
 void T55xxReadTrace(void);
+void TurnReadLFOn();
 int DemodPCF7931(uint8_t **outBlocks);
 int IsBlock0PCF7931(uint8_t *Block);
 int IsBlock1PCF7931(uint8_t *Block);
@@ -141,14 +150,14 @@ void EM4xReadWord(uint8_t Address, uint32_t Pwd, uint8_t PwdMode);
 void EM4xWriteWord(uint32_t Data, uint8_t Address, uint32_t Pwd, uint8_t PwdMode);
 
 /// iso14443.h
-void SimulateIso14443Tag(void);
-void AcquireRawAdcSamplesIso14443(uint32_t parameter);
-void ReadSTMemoryIso14443(uint32_t);
-void RAMFUNC SnoopIso14443(void);
+void SimulateIso14443bTag(void);
+void AcquireRawAdcSamplesIso14443b(uint32_t parameter);
+void ReadSTMemoryIso14443b(uint32_t);
+void RAMFUNC SnoopIso14443b(void);
 void SendRawCommand14443B(uint32_t, uint32_t, uint8_t, uint8_t[]);
 
 /// iso14443a.h
-void RAMFUNC SnoopIso14443a(uint8_t param);
+void RAMFUNC SniffIso14443a(uint8_t param);
 void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data);
 void ReaderIso14443a(UsbCommand * c);
 // Also used in iclass.c
@@ -185,6 +194,8 @@ void MifareCGetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datai
 void MifareCIdent();  // is "magic chinese" card?
 void MifareUSetPwd(uint8_t arg0, uint8_t *datain);
 
+void MifareCollectNonces(uint32_t arg0, uint32_t arg1);
+
 //desfire
 void Mifare_DES_Auth1(uint8_t arg0,uint8_t *datain);
 void Mifare_DES_Auth2(uint32_t arg0, uint8_t *datain);					   
@@ -202,6 +213,17 @@ void 	OnError(uint8_t reason);
 
 
 
+// desfire_crypto.h
+void	*mifare_cryto_preprocess_data (desfiretag_t tag, void *data, size_t *nbytes, off_t offset, int communication_settings);
+void    *mifare_cryto_postprocess_data (desfiretag_t tag, void *data, ssize_t *nbytes, int communication_settings);
+void    mifare_cypher_single_block (desfirekey_t  key, uint8_t *data, uint8_t *ivect, MifareCryptoDirection direction, MifareCryptoOperation operation, size_t block_size);
+void    mifare_cypher_blocks_chained (desfiretag_t tag, desfirekey_t key, uint8_t *ivect, uint8_t *data, size_t data_size, MifareCryptoDirection direction, MifareCryptoOperation operation);
+size_t  key_block_size (const desfirekey_t  key);
+size_t  padded_data_length (const size_t nbytes, const size_t block_size);
+size_t  maced_data_length (const desfirekey_t  key, const size_t nbytes);
+size_t  enciphered_data_length (const desfiretag_t tag, const size_t nbytes, int communication_settings);
+void    cmac_generate_subkeys (desfirekey_t key);
+void    cmac (const desfirekey_t  key, uint8_t *ivect, const uint8_t *data, size_t len, uint8_t *cmac);
 
 
 /// iso15693.h

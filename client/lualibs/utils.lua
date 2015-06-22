@@ -37,9 +37,7 @@ local Utils =
 	------------ FILE READING
 	ReadDumpFile = function (filename)
 	
-		if filename == nil then 
-			return nil, 'Filename is empty'
-		end
+		filename = filename or 'dumpdata.bin'
 		if #filename == 0 then
 			return nil, 'Filename length is zero'
 		end
@@ -112,7 +110,7 @@ local Utils =
 			return hash
 		end
 		return nil
-	end,
+	end,	
 	-- Takes a hex string and calculates a SHA1 hash
 	Sha1Hex = function(s)
 		if s == nil then return nil end
@@ -124,8 +122,8 @@ local Utils =
 			return hash
 		end
 		return nil
-	end,
-	
+	end,	
+
 	
 	-- input parameter is a string
 	-- Swaps the endianess and returns a number,  
