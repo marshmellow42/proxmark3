@@ -98,7 +98,7 @@ void SendRawCommand14443B(uint32_t, uint32_t, uint8_t, uint8_t[]);
 
 /// iso14443a.h
 void RAMFUNC SnoopIso14443a(uint8_t param);
-void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data);
+void SimulateIso14443aTag(int tagType, int flags, byte_t* data);
 void ReaderIso14443a(UsbCommand * c);
 // Also used in iclass.c
 bool RAMFUNC LogTrace(const uint8_t *btBytes, uint16_t len, uint32_t timestamp_start, uint32_t timestamp_end, uint8_t *parity, bool readerToTag);
@@ -130,8 +130,8 @@ void MifareEMemClr(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain)
 void MifareEMemSet(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain);
 void MifareEMemGet(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain);
 void MifareECardLoad(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain);
-void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain);  // Work with "magic Chinese" card
-void MifareCGetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain);
+void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain);  // Work with "magic Chinese" card
+void MifareCGetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain);
 void MifareCIdent();  // is "magic chinese" card?
 void MifareUSetPwd(uint8_t arg0, uint8_t *datain);
 

@@ -81,6 +81,7 @@ int mfnested(uint8_t blockNo, uint8_t keyType, uint8_t * key, uint8_t trgBlockNo
 	
 	UsbCommand c = {CMD_MIFARE_NESTED, {blockNo + keyType * 0x100, trgBlockNo + trgKeyType * 0x100, calibrate}};
 	memcpy(c.d.asBytes, key, 6);
+	clearCommandBuffer();
 	SendCommand(&c);
 
 	if (!WaitForResponseTimeout(CMD_ACK, &resp, 1500)) {
@@ -198,6 +199,7 @@ int mfCheckKeys (uint8_t blockNo, uint8_t keyType, bool clear_trace, uint8_t key
 	*key = 0;
 
 	UsbCommand c = {CMD_MIFARE_CHKKEYS, {((blockNo & 0xff) | ((keyType&0xff)<<8)), clear_trace, keycnt}};
+	clearCommandBuffer();
 	memcpy(c.d.asBytes, keyBlock, 6 * keycnt);
 	SendCommand(&c);
 
@@ -212,31 +214,38 @@ int mfCheckKeys (uint8_t blockNo, uint8_t keyType, bool clear_trace, uint8_t key
 
 int mfEmlGetMem(uint8_t *data, int blockNum, int blocksCount) {
 	UsbCommand c = {CMD_MIFARE_EML_MEMGET, {blockNum, blocksCount, 0}};
+	clearCommandBuffer();
  	SendCommand(&c);
-
-  UsbCommand resp;
+	UsbCommand resp;
 	if (!WaitForResponseTimeout(CMD_ACK,&resp,1500)) return 1;
 	memcpy(data, resp.d.asBytes, blocksCount * 16);
 	return 0;
 }
 
 int mfEmlSetMem(uint8_t *data, int blockNum, int blocksCount) {
-	UsbCommand c = {CMD_MIFARE_EML_MEMSET, {blockNum, blocksCount, 0}};
-	memcpy(c.d.asBytes, data, blocksCount * 16); 
+	return mfEmlSetMem_xt(data, blockNum, blocksCount, 16);
+}
+
+int mfEmlSetMem_xt(uint8_t *data, int blockNum, int blocksCount, int blockBtWidth) {
+	UsbCommand c = {CMD_MIFARE_EML_MEMSET, {blockNum, blocksCount, blockBtWidth}};
+	memcpy(c.d.asBytes, data, blocksCount * blockBtWidth); 
+
+	clearCommandBuffer();
 	SendCommand(&c);
 	return 0;
 }
 
 // "MAGIC" CARD
 
-int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, bool wantWipe) {
-	uint8_t oldblock0[16] = {0x00};
-	uint8_t block0[16] = {0x00};
+int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, uint8_t wipecard) {
 
-	int old = mfCGetBlock(0, oldblock0, CSETBLOCK_SINGLE_OPER);
+	uint8_t params = MAGIC_SINGLE;
+	uint8_t block0[16];
+	memset(block0, 0x00, sizeof(block0));
+
+	int old = mfCGetBlock(0, block0, params);
 	if (old == 0) {
-		memcpy(block0, oldblock0, 16);
-		PrintAndLog("old block 0:  %s", sprint_hex(block0,16));
+		PrintAndLog("old block 0:  %s", sprint_hex(block0, sizeof(block0)));
 	} else {
 		PrintAndLog("Couldn't get old data. Will write over the last bytes of Block 0.");
 	}
@@ -247,23 +256,28 @@ int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, bool w
 	// Mifare UID BCC
 	block0[4] = block0[0]^block0[1]^block0[2]^block0[3];
 	// mifare classic SAK(byte 5) and ATQA(byte 6 and 7, reversed)
-	if (sak!=NULL)
+	if ( sak != NULL )
 		block0[5]=sak[0];
-	if (atqa!=NULL) {
+
+	if ( atqa != NULL ) {
 		block0[6]=atqa[1];
 		block0[7]=atqa[0];
 	}
 	PrintAndLog("new block 0:  %s", sprint_hex(block0,16));
-	return mfCSetBlock(0, block0, oldUID, wantWipe, CSETBLOCK_SINGLE_OPER);
+
+	if ( wipecard ) params |= MAGIC_WIPE;
+	if ( oldUID == NULL) params |= MAGIC_UID;
+	
+	return mfCSetBlock(0, block0, oldUID, params);
 }
 
-int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, bool wantWipe, uint8_t params) {
+int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, uint8_t params) {
 
 	uint8_t isOK = 0;
-	UsbCommand c = {CMD_MIFARE_CSETBLOCK, {wantWipe, params & (0xFE | (uid == NULL ? 0:1)), blockNo}};
+	UsbCommand c = {CMD_MIFARE_CSETBLOCK, {params, blockNo, 0}};
 	memcpy(c.d.asBytes, data, 16); 
+	clearCommandBuffer();
 	SendCommand(&c);
-
   UsbCommand resp;
 	if (WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
 		isOK  = resp.arg[0] & 0xff;
@@ -280,10 +294,9 @@ int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, bool wantWipe, uin
 
 int mfCGetBlock(uint8_t blockNo, uint8_t *data, uint8_t params) {
 	uint8_t isOK = 0;
-
 	UsbCommand c = {CMD_MIFARE_CGETBLOCK, {params, 0, blockNo}};
+	clearCommandBuffer();
 	SendCommand(&c);
-
   UsbCommand resp;
 	if (WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
 		isOK  = resp.arg[0] & 0xff;
@@ -631,10 +644,15 @@ int tryDecryptWord(uint32_t nt, uint32_t ar_enc, uint32_t at_enc, uint8_t *data,
 	}
 	ks2 = ar_enc ^ prng_successor(nt, 64);
 	ks3 = at_enc ^ prng_successor(nt, 96);
+
+	PrintAndLog("Decrypting data with:");
+	PrintAndLog("      nt: %08x",nt);
+	PrintAndLog("  ar_enc: %08x",ar_enc);
+	PrintAndLog("  at_enc: %08x",at_enc);
+	PrintAndLog("\nEncrypted data: [%s]", sprint_hex(data,len) );
+
 	traceCrypto1 = lfsr_recovery64(ks2, ks3);
-
 	mf_crypto1_decrypt(traceCrypto1, data, len, 0);
-
 	PrintAndLog("Decrypted data: [%s]", sprint_hex(data,len) );
 	crypto1_destroy(traceCrypto1);
 	return 0;

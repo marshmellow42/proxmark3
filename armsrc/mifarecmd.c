@@ -17,6 +17,7 @@
 #include "apps.h"
 #include "util.h"
 #include "crc.h"
+#include "protocols.h"
 
 // the block number for the ISO14443-4 PCB
 uint8_t pcb_blocknum = 0;
@@ -913,7 +914,8 @@ void MifareEMemClr(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain)
 
 void MifareEMemSet(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain){
 	FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
-	emlSetMem(datain, arg0, arg1); // data, block num, blocks count
+	if (arg2==0) arg2 = 16; // backwards compat... default bytewidth
+	emlSetMem_xt(datain, arg0, arg1, arg2); // data, block num, blocks count, block byte width
 }
 
 void MifareEMemGet(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain){
@@ -1012,237 +1014,205 @@ void MifareECardLoad(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datai
 //-----------------------------------------------------------------------------
 // Work with "magic Chinese" card (email him: ouyangweidaxian@live.cn)
 // 
+// PARAMS - workFlags
+// bit 0 - need get UID
+// bit 1 - need wupC
+// bit 2 - need HALT after sequence
+// bit 3 - need turn on FPGA before sequence
+// bit 4 - need turn off FPGA
+// bit 5 - need to set datain instead of issuing USB reply (called via ARM for StandAloneMode14a)
+// bit 6 - wipe tag.
 //-----------------------------------------------------------------------------
-void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain){
-  
-  // params
-	uint8_t needWipe = arg0;
-	// bit 0 - need get UID
-	// bit 1 - need wupC
-	// bit 2 - need HALT after sequence
-	// bit 3 - need init FPGA and field before sequence
-	// bit 4 - need reset FPGA and LED
-	uint8_t workFlags = arg1;
-	uint8_t blockNo = arg2;
-	
-	// card commands
-	uint8_t wupC1[]       = { 0x40 }; 
-	uint8_t wupC2[]       = { 0x43 }; 
-	uint8_t wipeC[]       = { 0x41 }; 
-	
+// magic uid card generation 1 commands
+uint8_t wupC1[] = { MIFARE_MAGICWUPC1 }; 
+uint8_t wupC2[] = { MIFARE_MAGICWUPC2 }; 
+uint8_t wipeC[] = { MIFARE_MAGICWIPEC }; 
+
+void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain) {
+
+	// params
+	uint8_t workFlags = arg0;
+	uint8_t blockNo = arg1;
+
 	// variables
-	byte_t isOK = 0;
+	bool isOK = false; //assume we will get an error
 	uint8_t uid[10] = {0x00};
-	uint8_t d_block[18] = {0x00};
+	uint8_t data[18] = {0x00};
 	uint32_t cuid;
 	
 	uint8_t receivedAnswer[MAX_MIFARE_FRAME_SIZE];
 	uint8_t receivedAnswerPar[MAX_MIFARE_PARITY_SIZE];
 
 	// reset FPGA and LED
-	if (workFlags & 0x08) {
+	if (workFlags & MAGIC_INIT) {
 		LED_A_ON();
 		LED_B_OFF();
-		LED_C_OFF();
 		iso14443a_setup(FPGA_HF_ISO14443A_READER_LISTEN);
-	
 		clear_trace();
 		set_tracing(TRUE);
 	}
 
+	//loop doesn't loop just breaks out if error
 	while (true) {
-
-		// get UID from chip
-		if (workFlags & 0x01) {
+		// read UID and return to client with write
+		if (workFlags & MAGIC_UID) {
 			if(!iso14443a_select_card(uid, NULL, &cuid)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("Can't select card");
-				break;
-			};
-
-			if(mifare_classic_halt(NULL, cuid)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("Halt error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Can't select card");
 				break;
 			};
 		};
 	
-		// reset chip
-		if (needWipe){
+		// reset / wipe chip before write
+		if (workFlags & MAGIC_WIPE){
 			ReaderTransmitBitsPar(wupC1,7,0, NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wupC1 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error");
 				break;
 			};
 
 			ReaderTransmit(wipeC, sizeof(wipeC), NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wipeC error");
-				break;
-			};
-
-			if(mifare_classic_halt(NULL, cuid)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("Halt error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wipeC error");
 				break;
 			};
 		};	
 
 		// write block
-		if (workFlags & 0x02) {
+		if (workFlags & MAGIC_WUPC) {
 			ReaderTransmitBitsPar(wupC1,7,0, NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wupC1 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error");
 				break;
 			};
 
 			ReaderTransmit(wupC2, sizeof(wupC2), NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wupC2 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC2 error");
 				break;
 			};
 		}
 
-		if ((mifare_sendcmd_short(NULL, 0, 0xA0, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 1) || (receivedAnswer[0] != 0x0a)) {
-			if (MF_DBGLEVEL >= 1)	Dbprintf("write block send command error");
+		if ((mifare_sendcmd_short(NULL, 0, ISO14443A_CMD_WRITEBLOCK, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 1) || (receivedAnswer[0] != 0x0a)) {
+			if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("write block send command error");
 			break;
 		};
 	
-		memcpy(d_block, datain, 16);
-		AppendCrc14443a(d_block, 16);
+		memcpy(data, datain, 16);
+		AppendCrc14443a(data, 16);
 	
-		ReaderTransmit(d_block, sizeof(d_block), NULL);
+		ReaderTransmit(data, sizeof(data), NULL);
 		if ((ReaderReceive(receivedAnswer, receivedAnswerPar) != 1) || (receivedAnswer[0] != 0x0a)) {
-			if (MF_DBGLEVEL >= 1)	Dbprintf("write block send data error");
+			if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("write block send data error");
 			break;
 		};	
-	
-		if (workFlags & 0x04) {
+		
+		// halt after write
+		if (workFlags & MAGIC_HALT) {
 			if (mifare_classic_halt(NULL, cuid)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("Halt error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Halt error");
 				break;
 			};
 		}
 		
-		isOK = 1;
+		isOK = true;
 		break;
 	}
 	
-	LED_B_ON();
 	cmd_send(CMD_ACK,isOK,0,0,uid,4);
-	LED_B_OFF();
 
-	if ((workFlags & 0x10) || (!isOK)) {
+	if (workFlags & MAGIC_OFF) {
 		FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
 		LEDsoff();
 	}
 }
 
-
-void MifareCGetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain){
+void MifareCGetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain) {
   
-  // params
-	// bit 1 - need wupC
-	// bit 2 - need HALT after sequence
-	// bit 3 - need init FPGA and field before sequence
-	// bit 4 - need reset FPGA and LED
-	// bit 5 - need to set datain instead of issuing USB reply (called via ARM for StandAloneMode14a)
+	// params
 	uint8_t workFlags = arg0;
-	uint8_t blockNo = arg2;
-	
-	// card commands
-	uint8_t wupC1[]       = { 0x40 }; 
-	uint8_t wupC2[]       = { 0x43 }; 
+	uint8_t blockNo = arg1;
 	
 	// variables
-	byte_t isOK = 0;
+	bool isOK = false;
 	uint8_t data[18] = {0x00};
-	uint32_t cuid = 0;
-	
 	uint8_t receivedAnswer[MAX_MIFARE_FRAME_SIZE];
 	uint8_t receivedAnswerPar[MAX_MIFARE_PARITY_SIZE];
 	
-	if (workFlags & 0x08) {
+	if (workFlags & MAGIC_INIT) {
 		LED_A_ON();
 		LED_B_OFF();
-		LED_C_OFF();
 		iso14443a_setup(FPGA_HF_ISO14443A_READER_LISTEN);
-
 		clear_trace();
 		set_tracing(TRUE);
 	}
 
+	//loop doesn't loop just breaks out if error or done
 	while (true) {
-		if (workFlags & 0x02) {
+		if (workFlags & MAGIC_WUPC) {
 			ReaderTransmitBitsPar(wupC1,7,0, NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wupC1 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR) Dbprintf("wupC1 error");
 				break;
-			};
+			}
 
 			ReaderTransmit(wupC2, sizeof(wupC2), NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("wupC2 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR) Dbprintf("wupC2 error");
 				break;
-			};
+			}
 		}
 
 		// read block
-		if ((mifare_sendcmd_short(NULL, 0, 0x30, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 18)) {
-			if (MF_DBGLEVEL >= 1)	Dbprintf("read block send command error");
+		if ((mifare_sendcmd_short(NULL, 0, ISO14443A_CMD_READBLOCK, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 18)) {
+			if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("read block send command error");
 			break;
-		};
-		memcpy(data, receivedAnswer, 18);
-		
-		if (workFlags & 0x04) {
-			if (mifare_classic_halt(NULL, cuid)) {
-				if (MF_DBGLEVEL >= 1)	Dbprintf("Halt error");
+		}
+
+		memcpy(data, receivedAnswer, sizeof(data));
+
+		// send HALT
+		if (workFlags & MAGIC_HALT) {
+			if (mifare_classic_halt(NULL, 0)) {
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Halt error");
 				break;
-			};
+			}
 		}
 		
-		isOK = 1;
+		isOK = true;
 		break;
 	}
 	
-	LED_B_ON();
-	if (workFlags & 0x20) {
-		if (isOK)
-			memcpy(datain, data, 18);
-	}
-	else
-		cmd_send(CMD_ACK,isOK,0,0,data,18);
-	LED_B_OFF();
+	// if MAGIC_DATAIN, the data stays on device side.
+	if (workFlags & MAGIC_DATAIN && isOK)
+		memcpy(datain, data, sizeof(data));
 
-	if ((workFlags & 0x10) || (!isOK)) {
+	cmd_send(CMD_ACK,isOK,0,0,data,sizeof(data));
+
+	if ((workFlags & MAGIC_OFF) || (!isOK)) {
 		FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
 		LEDsoff();
 	}
 }
 
-void MifareCIdent(){
+void MifareCIdent() {
   
-	// card commands
-	uint8_t wupC1[]       = { 0x40 }; 
-	uint8_t wupC2[]       = { 0x43 }; 
-	
 	// variables
-	byte_t isOK = 1;
-	
-	uint8_t receivedAnswer[MAX_MIFARE_FRAME_SIZE];
-	uint8_t receivedAnswerPar[MAX_MIFARE_PARITY_SIZE];
+	bool isOK = true;	
+	uint8_t receivedAnswer[1];
+	uint8_t receivedAnswerPar[1];
 
 	ReaderTransmitBitsPar(wupC1,7,0, NULL);
 	if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-		isOK = 0;
-	};
+		isOK = false;
+	}
 
 	ReaderTransmit(wupC2, sizeof(wupC2), NULL);
 	if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-		isOK = 0;
-	};
+		isOK = false;
+	}
 
-	if (mifare_classic_halt(NULL, 0)) {
-		isOK = 0;
-	};
-
+	// removed the if,  since some magic tags misbehavies and send an answer to it.
+	mifare_classic_halt(NULL, 0);
 	cmd_send(CMD_ACK,isOK,0,0,0,0);
 }
 

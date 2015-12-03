@@ -34,6 +34,7 @@
 // Craig Young - 14a stand-alone code
 #ifdef WITH_ISO14443a_StandAlone
  #include "iso14443a.h"
+ #include "protocols.h"
 #endif
 
 #define abs(x) ( ((x)<0) ? -(x) : (x) )
@@ -386,6 +387,8 @@ void StandAloneMode14a()
 	uint32_t uid_tmp2 = 0;
 	iso14a_card_select_t hi14a_card[OPTS];
 
+	uint8_t params = (MAGIC_SINGLE | MAGIC_DATAIN);
+
 	LED(selected + 1, 0);
 
 	for (;;)
@@ -497,36 +500,9 @@ void StandAloneMode14a()
 			// need this delay to prevent catching some weird data
 			SpinDelay(500);
 			// Begin clone function here:
-			/* Example from client/mifarehost.c for commanding a block write for "magic Chinese" cards:
-					UsbCommand c = {CMD_MIFARE_CSETBLOCK, {wantWipe, params & (0xFE | (uid == NULL ? 0:1)), blockNo}};
-					memcpy(c.d.asBytes, data, 16);
-					SendCommand(&c);
-
-					Block read is similar:
-					UsbCommand c = {CMD_MIFARE_CGETBLOCK, {params, 0, blockNo}};
-					We need to imitate that call with blockNo 0 to set a uid.
-
-					The get and set commands are handled in this file:
-					// Work with "magic Chinese" card
-					case CMD_MIFARE_CSETBLOCK:
-						MifareCSetBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
-						break;
-					case CMD_MIFARE_CGETBLOCK:
-						MifareCGetBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
-						break;
-
-				mfCSetUID provides example logic for UID set workflow:
-					-Read block0 from card in field with MifareCGetBlock()
-					-Configure new values without replacing reserved bytes
-							memcpy(block0, uid, 4); // Copy UID bytes from byte array
-							// Mifare UID BCC
-							block0[4] = block0[0]^block0[1]^block0[2]^block0[3]; // BCC on byte 5
-							Bytes 5-7 are reserved SAK and ATQA for mifare classic
-					-Use mfCSetBlock(0, block0, oldUID, wantWipe, CSETBLOCK_SINGLE_OPER) to write it
-			*/
 			uint8_t oldBlock0[16] = {0}, newBlock0[16] = {0}, testBlock0[16] = {0};
-			// arg0 = Flags == CSETBLOCK_SINGLE_OPER=0x1F, arg1=returnSlot, arg2=blockNo
-			MifareCGetBlock(0x3F, 1, 0, oldBlock0);
+			// arg0 = Flags, arg1=blockNo
+			MifareCGetBlock(params, 0, oldBlock0);
 			if (oldBlock0[0] == 0 && oldBlock0[0] == oldBlock0[1]  && oldBlock0[1] == oldBlock0[2] && oldBlock0[2] == oldBlock0[3]) {
 				Dbprintf("No changeable tag detected. Returning to replay mode for bank[%d]", selected);
 				playing = 1;
@@ -541,9 +517,11 @@ void StandAloneMode14a()
 				newBlock0[2] = 0xFF & (uid_1st[selected]>>8);
 				newBlock0[3] = 0xFF & (uid_1st[selected]);
 				newBlock0[4] = newBlock0[0]^newBlock0[1]^newBlock0[2]^newBlock0[3];
-				// arg0 = needWipe, arg1 = workFlags, arg2 = blockNo, datain
-				MifareCSetBlock(0, 0xFF,0, newBlock0);
-				MifareCGetBlock(0x3F, 1, 0, testBlock0);
+
+				// arg0 = workFlags, arg1 = blockNo, datain
+				MifareCSetBlock(params, 0, newBlock0);
+				MifareCGetBlock(params, 0, testBlock0);
+
 				if (memcmp(testBlock0,newBlock0,16)==0)
 				{
 					DbpString("Cloned successfull!");
@@ -577,22 +555,26 @@ void StandAloneMode14a()
 					int button_action = BUTTON_HELD(1000);
 					if (button_action == 0) { // No button action, proceed with sim
 						uint8_t data[512] = {0}; // in case there is a read command received we shouldn't break
+						uint8_t flags = ( uid_2nd[selected] > 0x00 ) ? FLAG_7B_UID_IN_DATA : FLAG_4B_UID_IN_DATA;
+						num_to_bytes(uid_1st[selected], 3, data);
+						num_to_bytes(uid_2nd[selected], 4, data);
+		
 						Dbprintf("Simulating ISO14443a tag with uid[0]: %08x, uid[1]: %08x [Bank: %u]", uid_1st[selected],uid_2nd[selected],selected);
 						if (hi14a_card[selected].sak == 8 && hi14a_card[selected].atqa[0] == 4 && hi14a_card[selected].atqa[1] == 0) {
 							DbpString("Mifare Classic");
-							SimulateIso14443aTag(1,uid_1st[selected], uid_2nd[selected], data); // Mifare Classic
+							SimulateIso14443aTag(1, flags, data); // Mifare Classic
 						}
 						else if (hi14a_card[selected].sak == 0 && hi14a_card[selected].atqa[0] == 0x44 && hi14a_card[selected].atqa[1] == 0) {
 							DbpString("Mifare Ultralight");
-							SimulateIso14443aTag(2,uid_1st[selected],uid_2nd[selected],data); // Mifare Ultralight
+							SimulateIso14443aTag(2, flags, data); // Mifare Ultralight
 						}
 						else if (hi14a_card[selected].sak == 20 && hi14a_card[selected].atqa[0] == 0x44 && hi14a_card[selected].atqa[1] == 3) {
 							DbpString("Mifare DESFire");
-							SimulateIso14443aTag(3,uid_1st[selected],uid_2nd[selected],data); // Mifare DESFire
+							SimulateIso14443aTag(3, flags, data); // Mifare DESFire
 						}
 						else {
 							Dbprintf("Unrecognized tag type -- defaulting to Mifare Classic emulation");
-							SimulateIso14443aTag(1,uid_1st[selected], uid_2nd[selected], data);
+							SimulateIso14443aTag(1, flags, data);
 						}
 					}
 					else if (button_action == BUTTON_SINGLE_CLICK) {
@@ -1086,9 +1068,8 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			ReaderIso14443a(c);
 			break;
 		case CMD_SIMULATE_TAG_ISO_14443a:
-			SimulateIso14443aTag(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);  // ## Simulate iso14443a tag - pass tag type & UID
+			SimulateIso14443aTag(c->arg[0], c->arg[1], c->d.asBytes);  // ## Simulate iso14443a tag - pass tag type & UID
 			break;
-			
 		case CMD_EPA_PACE_COLLECT_NONCE:
 			EPA_PACE_Collect_Nonce(c);
 			break;
@@ -1155,10 +1136,10 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			
 		// Work with "magic Chinese" card
 		case CMD_MIFARE_CSETBLOCK:
-			MifareCSetBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
+			MifareCSetBlock(c->arg[0], c->arg[1], c->d.asBytes);
 			break;
 		case CMD_MIFARE_CGETBLOCK:
-			MifareCGetBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
+			MifareCGetBlock(c->arg[0], c->arg[1], c->d.asBytes);
 			break;
 		case CMD_MIFARE_CIDENT:
 			MifareCIdent();

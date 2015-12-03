@@ -19,17 +19,10 @@
 #include "nonce2key/nonce2key.h"
 #include "nonce2key/crapto1.h"
 #include "iso14443crc.h"
+#include "protocols.h"
 
 #define MEM_CHUNK               1000000
 #define NESTED_SECTOR_RETRY     10
-
-// mfCSetBlock work flags
-#define CSETBLOCK_UID 					0x01
-#define CSETBLOCK_WUPC					0x02
-#define CSETBLOCK_HALT					0x04
-#define CSETBLOCK_INIT_FIELD		0x08
-#define CSETBLOCK_RESET_FIELD		0x10
-#define CSETBLOCK_SINGLE_OPER		0x1F
 
 // mifare tracer flags
 #define TRACE_IDLE		 					0x00
@@ -54,9 +47,10 @@ int mfCheckKeys (uint8_t blockNo, uint8_t keyType, bool clear_trace, uint8_t key
 
 int mfEmlGetMem(uint8_t *data, int blockNum, int blocksCount);
 int mfEmlSetMem(uint8_t *data, int blockNum, int blocksCount);
+int mfEmlSetMem_xt(uint8_t *data, int blockNum, int blocksCount, int blockBtWidth);
 
-int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, bool wantWipe);
-int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, bool wantWipe, uint8_t params);
+int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, uint8_t wipecard);
+int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, uint8_t params);
 int mfCGetBlock(uint8_t blockNo, uint8_t *data, uint8_t params);
 
 int mfTraceInit(uint8_t *tuid, uint8_t *atqa, uint8_t sak, bool wantSaveToEmlFile);

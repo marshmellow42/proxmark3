@@ -15,7 +15,6 @@
 #include "util.h"
 #include "string.h"
 #include "cmd.h"
-
 #include "iso14443crc.h"
 #include "iso14443a.h"
 #include "crapto1.h"
@@ -922,13 +921,23 @@ bool prepare_allocated_tag_modulation(tag_response_info_t* response_info) {
 // Main loop of simulated tag: receive commands from reader, decide what
 // response to send, and send it.
 //-----------------------------------------------------------------------------
-void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
+void SimulateIso14443aTag(int tagType, int flags, byte_t* data)
 {
+	uint32_t counters[] = {0,0,0};
+	//Here, we collect UID,NT,AR,NR,UID2,NT2,AR2,NR2
+	// This can be used in a reader-only attack.
+	// (it can also be retrieved via 'hf list 14a', but hey...
+	uint32_t ar_nr_responses[] = {0,0,0,0,0,0,0,0,0,0};
+	uint8_t ar_nr_collected = 0;
+
 	uint8_t sak;
 
+	// PACK response to PWD AUTH for EV1/NTAG
+	uint8_t response8[4] =  {0,0,0,0};
+
 	// The first response contains the ATQA (note: bytes are transmitted in reverse order).
-	uint8_t response1[2];
-	
+	uint8_t response1[2] =  {0,0};
+
 	switch (tagType) {
 		case 1: { // MIFARE Classic
 			// Says: I am Mifare 1k - original line
@@ -938,7 +947,7 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 		} break;
 		case 2: { // MIFARE Ultralight
 			// Says: I am a stupid memory tag, no crypto
-			response1[0] = 0x04;
+			response1[0] = 0x44;
 			response1[1] = 0x00;
 			sak = 0x00;
 		} break;
@@ -959,6 +968,22 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 			response1[0] = 0x01;
 			response1[1] = 0x0f;
 			sak = 0x01;
+		} break;
+		case 6: { // MIFARE Mini
+			// Says: I am a Mifare Mini, 320b
+			response1[0] = 0x44;
+			response1[1] = 0x00;
+			sak = 0x09;
+		} break;
+		case 7: { // NTAG?
+			// Says: I am a NTAG, 
+			response1[0] = 0x44;
+			response1[1] = 0x00;
+			sak = 0x00;
+			// PACK
+			response8[0] = 0x80;
+			response8[1] = 0x80;
+			ComputeCrc14443(CRC_14443_A, response8, 2, &response8[2], &response8[3]);
 		} break;		
 		default: {
 			Dbprintf("Error: unkown tagtype (%d)",tagType);
@@ -972,17 +997,24 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 	// Check if the uid uses the (optional) part
 	uint8_t response2a[5] = {0x00};
 	
-	if (uid_2nd) {
+	if (flags & FLAG_7B_UID_IN_DATA) {
 		response2[0] = 0x88;
-		num_to_bytes(uid_1st,3,response2+1);
-		num_to_bytes(uid_2nd,4,response2a);
+		response2[1] = data[0];
+		response2[2] = data[1];
+		response2[3] = data[2];
+
+		response2a[0] = data[3];
+		response2a[1] = data[4];
+		response2a[2] = data[5];
+		response2a[3] = data[6]; //??
 		response2a[4] = response2a[0] ^ response2a[1] ^ response2a[2] ^ response2a[3];
 
 		// Configure the ATQA and SAK accordingly
 		response1[0] |= 0x40;
 		sak |= 0x04;
 	} else {
-		num_to_bytes(uid_1st,4,response2);
+		memcpy(response2, data, 4);
+		//num_to_bytes(uid_1st,4,response2);
 		// Configure the ATQA and SAK accordingly
 		response1[0] &= 0xBF;
 		sak &= 0xFB;
@@ -1009,15 +1041,25 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 	// TC(1) = 0x02: CID supported, NAD not supported
 	ComputeCrc14443(CRC_14443_A, response6, 4, &response6[4], &response6[5]);
 
-	#define TAG_RESPONSE_COUNT 7
+	// Prepare GET_VERSION (different for UL EV-1 / NTAG)
+	//uint8_t response7_EV1[] = {0x00, 0x04, 0x03, 0x01, 0x01, 0x00, 0x0b, 0x03, 0xfd, 0xf7};  //EV1 48bytes VERSION.
+	uint8_t response7_NTAG[] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03, 0x01, 0x9e}; //NTAG 215
+
+	// Prepare CHK_TEARING
+	uint8_t response9[] =  {0xBD,0x90,0x3f};
+
+	#define TAG_RESPONSE_COUNT 10
 	tag_response_info_t responses[TAG_RESPONSE_COUNT] = {
-		{ .response = response1,  .response_n = sizeof(response1)  },  // Answer to request - respond with card type
-		{ .response = response2,  .response_n = sizeof(response2)  },  // Anticollision cascade1 - respond with uid
-		{ .response = response2a, .response_n = sizeof(response2a) },  // Anticollision cascade2 - respond with 2nd half of uid if asked
-		{ .response = response3,  .response_n = sizeof(response3)  },  // Acknowledge select - cascade 1
-		{ .response = response3a, .response_n = sizeof(response3a) },  // Acknowledge select - cascade 2
-		{ .response = response5,  .response_n = sizeof(response5)  },  // Authentication answer (random nonce)
-		{ .response = response6,  .response_n = sizeof(response6)  },  // dummy ATS (pseudo-ATR), answer to RATS
+		{ .response = response1,      .response_n = sizeof(response1)     }, // Answer to request - respond with card type
+		{ .response = response2,      .response_n = sizeof(response2)     }, // Anticollision cascade1 - respond with uid
+		{ .response = response2a,     .response_n = sizeof(response2a)    }, // Anticollision cascade2 - respond with 2nd half of uid if asked
+		{ .response = response3,      .response_n = sizeof(response3)     }, // Acknowledge select - cascade 1
+		{ .response = response3a,     .response_n = sizeof(response3a)    }, // Acknowledge select - cascade 2
+		{ .response = response5,      .response_n = sizeof(response5)     }, // Authentication answer (random nonce)
+		{ .response = response6,      .response_n = sizeof(response6)     }, // dummy ATS (pseudo-ATR), answer to RATS
+		{ .response = response7_NTAG, .response_n = sizeof(response7_NTAG)}, // EV1/NTAG GET_VERSION response
+		{ .response = response8,      .response_n = sizeof(response8)     }, // EV1/NTAG PACK response
+		{ .response = response9,      .response_n = sizeof(response9)     }  // EV1/NTAG CHK_TEAR response
 	};
 
 	// Allocate 512 bytes for the dynamic modulation, created when the reader queries for it
@@ -1092,10 +1134,64 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 		} else if(receivedCmd[1] == 0x70 && receivedCmd[0] == 0x95) {	// Received a SELECT (cascade 2)
 			p_response = &responses[4]; order = 30;
 		} else if(receivedCmd[0] == 0x30) {	// Received a (plain) READ
-			EmSendCmdEx(data+(4*receivedCmd[1]),16,false);
-			// Dbprintf("Read request from reader: %x %x",receivedCmd[0],receivedCmd[1]);
-			// We already responded, do not send anything with the EmSendCmd14443aRaw() that is called below
+			uint8_t block = receivedCmd[1];
+			// if Ultralight or NTAG (4 byte blocks)
+			if ( tagType == 7 || tagType == 2 ) {
+				uint16_t start = 4 * block;
+				uint8_t emdata[MAX_MIFARE_FRAME_SIZE];
+				emlGetMemBt( emdata, start, 16);
+				AppendCrc14443a(emdata, 16);
+				EmSendCmdEx(emdata, sizeof(emdata), false);
+				// We already responded, do not send anything with the EmSendCmd14443aRaw() that is called below
+				p_response = NULL;
+			} else { // all other tags (16 byte block tags)
+				EmSendCmdEx(data+(4*receivedCmd[1]),16,false);
+				// Dbprintf("Read request from reader: %x %x",receivedCmd[0],receivedCmd[1]);
+				// We already responded, do not send anything with the EmSendCmd14443aRaw() that is called below
+				p_response = NULL;
+			}
+		} else if(receivedCmd[0] == 0x3A) {	// Received a FAST READ (ranged read)
+				
+				uint8_t emdata[MAX_FRAME_SIZE];
+				int start =  receivedCmd[1] * 4;
+				int len   = (receivedCmd[2] - receivedCmd[1] + 1) * 4;
+				emlGetMemBt( emdata, start, len);
+				AppendCrc14443a(emdata, len);
+				EmSendCmdEx(emdata, len+2, false);				
+				p_response = NULL;
+				
+		} else if(receivedCmd[0] == 0x3C && tagType == 7) {	// Received a READ SIGNATURE -- 
+				// ECC data,  taken from a NTAG215 amiibo token. might work. LEN: 32, + 2 crc
+				uint8_t data[] = {0x56,0x06,0xa6,0x4f,0x43,0x32,0x53,0x6f,
+								  0x43,0xda,0x45,0xd6,0x61,0x38,0xaa,0x1e,
+								  0xcf,0xd3,0x61,0x36,0xca,0x5f,0xbb,0x05,
+								  0xce,0x21,0x24,0x5b,0xa6,0x7a,0x79,0x07,
+								  0x00,0x00};
+				AppendCrc14443a(data, sizeof(data)-2);
+				EmSendCmdEx(data,sizeof(data),false);
+				p_response = NULL;					
+		} else if (receivedCmd[0] == 0x39 && tagType == 7) {	// Received a READ COUNTER -- 
+			uint8_t index = receivedCmd[1];
+			uint8_t data[] =  {0x00,0x00,0x00,0x14,0xa5};
+			if ( counters[index] > 0) {
+				num_to_bytes(counters[index], 3, data);
+				AppendCrc14443a(data, sizeof(data)-2);
+			}
+			EmSendCmdEx(data,sizeof(data),false);				
 			p_response = NULL;
+		} else if (receivedCmd[0] == 0xA5 && tagType == 7) {	// Received a INC COUNTER -- 
+			// number of counter
+			uint8_t counter = receivedCmd[1];
+			uint32_t val = bytes_to_num(receivedCmd+2,4);
+			counters[counter] = val;
+		
+			// send ACK
+			uint8_t ack[] = {0x0a};
+			EmSendCmdEx(ack,sizeof(ack),false);
+			p_response = NULL;
+			
+		} else if(receivedCmd[0] == 0x3E && tagType == 7) {	// Received a CHECK_TEARING_EVENT -- 
+				p_response = &responses[9];				
 		} else if(receivedCmd[0] == 0x50) {	// Received a HALT
 
 			if (tracing) {
@@ -1103,7 +1199,12 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 			}
 			p_response = NULL;
 		} else if(receivedCmd[0] == 0x60 || receivedCmd[0] == 0x61) {	// Received an authentication request
-			p_response = &responses[5]; order = 7;
+					
+			if ( tagType == 7 ) {   // IF NTAG /EV1  0x60 == GET_VERSION, not a authentication request.
+				p_response = &responses[7];
+			} else {
+				p_response = &responses[5]; order = 7;
+			}
 		} else if(receivedCmd[0] == 0xE0) {	// Received a RATS request
 			if (tagType == 1 || tagType == 2) {	// RATS not supported
 				EmSend4bit(CARD_NACK_NA);
@@ -1115,12 +1216,72 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 			if (tracing) {
 				LogTrace(receivedCmd, Uart.len, Uart.startTime*16 - DELAY_AIR2ARM_AS_TAG, Uart.endTime*16 - DELAY_AIR2ARM_AS_TAG, Uart.parity, TRUE);
 			}
+			uint32_t nonce = bytes_to_num(response5,4);
 			uint32_t nr = bytes_to_num(receivedCmd,4);
 			uint32_t ar = bytes_to_num(receivedCmd+4,4);
-			Dbprintf("Auth attempt {nr}{ar}: %08x %08x",nr,ar);
+			//Dbprintf("Auth attempt {nonce}{nr}{ar}: %08x %08x %08x", nonce, nr, ar);
+
+			if(flags & FLAG_NR_AR_ATTACK )
+			{
+				if(ar_nr_collected < 2){
+					// Avoid duplicates... probably not necessary, nr should vary. 
+					//if(ar_nr_responses[3] != nr){						
+						ar_nr_responses[ar_nr_collected*5]   = 0;
+						ar_nr_responses[ar_nr_collected*5+1] = 0;
+						ar_nr_responses[ar_nr_collected*5+2] = nonce;
+						ar_nr_responses[ar_nr_collected*5+3] = nr;
+						ar_nr_responses[ar_nr_collected*5+4] = ar;
+						ar_nr_collected++;
+					//}
+				}			
+
+				if(ar_nr_collected > 1 ) {
+				
+					if (MF_DBGLEVEL >= 2) {
+							Dbprintf("Collected two pairs of AR/NR which can be used to extract keys from reader:");
+							Dbprintf("../tools/mfkey/mfkey32 %07x%08x %08x %08x %08x %08x %08x",
+								ar_nr_responses[0], // UID1
+								ar_nr_responses[1], // UID2
+								ar_nr_responses[2], // NT
+								ar_nr_responses[3], // AR1
+								ar_nr_responses[4], // NR1
+								ar_nr_responses[8], // AR2
+								ar_nr_responses[9]  // NR2
+							);
+							Dbprintf("../tools/mfkey/mfkey32v2 %06x%08x %08x %08x %08x %08x %08x %08x",
+								ar_nr_responses[0], // UID1
+								ar_nr_responses[1], // UID2
+								ar_nr_responses[2], // NT1
+								ar_nr_responses[3], // AR1
+								ar_nr_responses[4], // NR1
+								ar_nr_responses[7], // NT2
+								ar_nr_responses[8], // AR2
+								ar_nr_responses[9]  // NR2
+								);
+					}
+					uint8_t len = ar_nr_collected*5*4;
+					cmd_send(CMD_ACK,CMD_SIMULATE_MIFARE_CARD,len,0,&ar_nr_responses,len);
+					ar_nr_collected = 0;
+					memset(ar_nr_responses, 0x00, len);
+				}
+			}
+		} else if (receivedCmd[0] == 0x1b) { // NTAG / EV-1 authentication
+			if ( tagType == 7 ) {
+				p_response =  &responses[8]; // PACK response
+				uint32_t pwd = bytes_to_num(receivedCmd+1,4);
+				
+				if ( MF_DBGLEVEL >= 3)  Dbprintf("Auth attempt: %08x", pwd);	
+			}
 		} else {
 			// Check for ISO 14443A-4 compliant commands, look at left nibble
 			switch (receivedCmd[0]) {
+				case 0x02:
+				case 0x03: {  // IBlock (command no CID)
+					dynamic_response_info.response[0] = receivedCmd[0];
+					dynamic_response_info.response[1] = 0x90;
+					dynamic_response_info.response[2] = 0x00;
+					dynamic_response_info.response_n = 3;
+				} break;
 
 				case 0x0B:
 				case 0x0A: { // IBlock (command)
@@ -1143,7 +1304,7 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 				  dynamic_response_info.response_n = 2;
 				} break;
 				  
-				case 0xBA: { //
+				case 0xBA: { // ping / pong
 				  memcpy(dynamic_response_info.response,"\xAB\x00",2);
 				  dynamic_response_info.response_n = 2;
 				} break;
@@ -1221,9 +1382,16 @@ void SimulateIso14443aTag(int tagType, int uid_1st, int uid_2nd, byte_t* data)
 		}
 	}
 
-	Dbprintf("%x %x %x", happened, happened2, cmdsRecvd);
-	LED_A_OFF();
+	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
+	set_tracing(FALSE);
 	BigBuf_free_keep_EM();
+	LED_A_OFF();
+
+	if (MF_DBGLEVEL >= 4){
+		Dbprintf("-[ Wake ups after halt [%d]", happened);
+		Dbprintf("-[ Messages after halt [%d]", happened2);
+		Dbprintf("-[ Num of received cmd [%d]", cmdsRecvd);
+	}
 }
 
 
@@ -1695,10 +1863,12 @@ int ReaderReceive(uint8_t *receivedAnswer, uint8_t *parity)
 	return Demod.len;
 }
 
-/* performs iso14443a anticollision procedure
- * fills the uid pointer unless NULL
- * fills resp_data unless NULL */
-int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, uint32_t *cuid_ptr) {
+// performs iso14443a anticollision (optional) and card select procedure
+// fills the uid and cuid pointer unless NULL
+// fills the card info record unless NULL
+// if anticollision is false, then the UID must be provided in uid_ptr[] 
+// and num_cascades must be set (1: 4 Byte UID, 2: 7 Byte UID, 3: 10 Byte UID)
+int iso14443a_select_card_ex(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, uint32_t *cuid_ptr, bool anticollision, uint8_t num_cascades) {
 	uint8_t wupa[]       = { 0x52 };  // 0x26 - REQA  0x52 - WAKE-UP
 	uint8_t sel_all[]    = { 0x93,0x20 };
 	uint8_t sel_uid[]    = { 0x93,0x70,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
@@ -1713,7 +1883,7 @@ int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, u
 	int len;
 
 	// Broadcast for a card, WUPA (0x52) will force response from all cards in the field
-    ReaderTransmitBitsPar(wupa,7,0, NULL);
+	ReaderTransmitBitsPar(wupa,7,NULL, NULL);
 	
 	// Receive the ATQA
 	if(!ReaderReceive(resp, resp_par)) return 0;
@@ -1724,9 +1894,11 @@ int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, u
 		memset(p_hi14a_card->uid,0,10);
 	}
 
-	// clear uid
-	if (uid_ptr) {
-		memset(uid_ptr,0,10);
+	if (anticollision) {
+		// clear uid
+		if (uid_ptr) {
+			memset(uid_ptr,0,10);
+		}
 	}
 
 	// check for proprietary anticollision:
@@ -1741,40 +1913,49 @@ int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, u
 		// SELECT_* (L1: 0x93, L2: 0x95, L3: 0x97)
 		sel_uid[0] = sel_all[0] = 0x93 + cascade_level * 2;
 
-		// SELECT_ALL
-		ReaderTransmit(sel_all, sizeof(sel_all), NULL);
-		if (!ReaderReceive(resp, resp_par)) return 0;
+		if (anticollision) {
+			// SELECT_ALL
+			ReaderTransmit(sel_all, sizeof(sel_all), NULL);
+			if (!ReaderReceive(resp, resp_par)) return 0;
 
-		if (Demod.collisionPos) {			// we had a collision and need to construct the UID bit by bit
-			memset(uid_resp, 0, 4);
-			uint16_t uid_resp_bits = 0;
-			uint16_t collision_answer_offset = 0;
-			// anti-collision-loop:
-			while (Demod.collisionPos) {
-				Dbprintf("Multiple tags detected. Collision after Bit %d", Demod.collisionPos);
-				for (uint16_t i = collision_answer_offset; i < Demod.collisionPos; i++, uid_resp_bits++) {	// add valid UID bits before collision point
-					uint16_t UIDbit = (resp[i/8] >> (i % 8)) & 0x01;
-					uid_resp[uid_resp_bits / 8] |= UIDbit << (uid_resp_bits % 8);
+			if (Demod.collisionPos) {			// we had a collision and need to construct the UID bit by bit
+				memset(uid_resp, 0, 4);
+				uint16_t uid_resp_bits = 0;
+				uint16_t collision_answer_offset = 0;
+				// anti-collision-loop:
+				while (Demod.collisionPos) {
+					Dbprintf("Multiple tags detected. Collision after Bit %d", Demod.collisionPos);
+					for (uint16_t i = collision_answer_offset; i < Demod.collisionPos; i++, uid_resp_bits++) {	// add valid UID bits before collision point
+						uint16_t UIDbit = (resp[i/8] >> (i % 8)) & 0x01;
+						uid_resp[uid_resp_bits / 8] |= UIDbit << (uid_resp_bits % 8);
+					}
+					uid_resp[uid_resp_bits/8] |= 1 << (uid_resp_bits % 8);					// next time select the card(s) with a 1 in the collision position
+					uid_resp_bits++;
+					// construct anticollosion command:
+					sel_uid[1] = ((2 + uid_resp_bits/8) << 4) | (uid_resp_bits & 0x07);  	// length of data in bytes and bits
+					for (uint16_t i = 0; i <= uid_resp_bits/8; i++) {
+						sel_uid[2+i] = uid_resp[i];
+					}
+					collision_answer_offset = uid_resp_bits%8;
+					ReaderTransmitBits(sel_uid, 16 + uid_resp_bits, NULL);
+					if (!ReaderReceiveOffset(resp, collision_answer_offset, resp_par)) return 0;
 				}
-				uid_resp[uid_resp_bits/8] |= 1 << (uid_resp_bits % 8);					// next time select the card(s) with a 1 in the collision position
-				uid_resp_bits++;
-				// construct anticollosion command:
-				sel_uid[1] = ((2 + uid_resp_bits/8) << 4) | (uid_resp_bits & 0x07);  	// length of data in bytes and bits
-				for (uint16_t i = 0; i <= uid_resp_bits/8; i++) {
-					sel_uid[2+i] = uid_resp[i];
+				// finally, add the last bits and BCC of the UID
+				for (uint16_t i = collision_answer_offset; i < (Demod.len-1)*8; i++, uid_resp_bits++) {
+					uint16_t UIDbit = (resp[i/8] >> (i%8)) & 0x01;
+					uid_resp[uid_resp_bits/8] |= UIDbit << (uid_resp_bits % 8);
 				}
-				collision_answer_offset = uid_resp_bits%8;
-				ReaderTransmitBits(sel_uid, 16 + uid_resp_bits, NULL);
-				if (!ReaderReceiveOffset(resp, collision_answer_offset, resp_par)) return 0;
-			}
-			// finally, add the last bits and BCC of the UID
-			for (uint16_t i = collision_answer_offset; i < (Demod.len-1)*8; i++, uid_resp_bits++) {
-				uint16_t UIDbit = (resp[i/8] >> (i%8)) & 0x01;
-				uid_resp[uid_resp_bits/8] |= UIDbit << (uid_resp_bits % 8);
-			}
 
-		} else {		// no collision, use the response to SELECT_ALL as current uid
-			memcpy(uid_resp, resp, 4);
+			} else {		// no collision, use the response to SELECT_ALL as current uid
+				memcpy(uid_resp, resp, 4);
+			}
+		} else {
+			if (cascade_level < num_cascades - 1) {
+				uid_resp[0] = 0x88;
+				memcpy(uid_resp+1, uid_ptr+cascade_level*3, 3);
+			} else {
+				memcpy(uid_resp, uid_ptr+cascade_level*3, 4);
+			}			
 		}
 		uid_resp_len = 4;
 
@@ -1801,11 +1982,10 @@ int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, u
 			uid_resp[0] = uid_resp[1];
 			uid_resp[1] = uid_resp[2];
 			uid_resp[2] = uid_resp[3]; 
-
 			uid_resp_len = 3;
 		}
 
-		if(uid_ptr) {
+		if(uid_ptr && anticollision) {
 			memcpy(uid_ptr + (cascade_level*3), uid_resp, uid_resp_len);
 		}
 
@@ -1841,7 +2021,14 @@ int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, u
 	// set default timeout based on ATS
 	iso14a_set_ATS_timeout(resp);
 
-	return 1;	
+	return 1;
+}
+
+/* performs iso14443a anticollision procedure
+ * fills the uid pointer unless NULL
+ * fills resp_data unless NULL */
+int iso14443a_select_card(byte_t *uid_ptr, iso14a_card_select_t *p_hi14a_card, uint32_t *cuid_ptr) {
+	return iso14443a_select_card_ex(uid_ptr, p_hi14a_card, cuid_ptr, true, 0);
 }
 
 void iso14443a_setup(uint8_t fpga_minor_mode) {

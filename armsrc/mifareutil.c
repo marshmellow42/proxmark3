@@ -553,11 +553,14 @@ uint8_t FirstBlockOfSector(uint8_t sectorNo)
 		
 }
 
-
 // work with emulator memory
 void emlSetMem(uint8_t *data, int blockNum, int blocksCount) {
+	emlSetMem_xt(data, blockNum, blocksCount, 16);
+}
+
+void emlSetMem_xt(uint8_t *data, int blockNum, int blocksCount, int blockBtWidth) {
 	uint8_t* emCARD = BigBuf_get_EM_addr();
-	memcpy(emCARD + blockNum * 16, data, blocksCount * 16);
+	memcpy(emCARD + blockNum * blockBtWidth, data, blocksCount * blockBtWidth);
 }
 
 void emlGetMem(uint8_t *data, int blockNum, int blocksCount) {

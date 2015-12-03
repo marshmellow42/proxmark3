@@ -53,5 +53,6 @@ int CmdHF14AMfCGetBlk(const char* cmd);
 int CmdHF14AMfCGetSc(const char* cmd);
 int CmdHF14AMfCLoad(const char* cmd);
 int CmdHF14AMfCSave(const char* cmd);
+int CmdHf14MfDecryptBytes(const char *Cmd);
 
 #endif
