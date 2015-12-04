@@ -367,7 +367,9 @@ static int ndef_print_CC(uint8_t *data) {
 	PrintAndLog("  %02X : NDEF Magic Number", data[0]); 
 	PrintAndLog("  %02X : version %d.%d supported by tag", data[1], (data[1] & 0xF0) >> 4, data[1] & 0x0f);
 	PrintAndLog("  %02X : Physical Memory Size: %d bytes", data[2], (data[2] + 1) * 8);
-	if ( data[2] == 0x12 )
+	if ( data[2] == 0x96 )
+		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 48);
+	else if ( data[2] == 0x12 )
 		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 144);
 	else if ( data[2] == 0x3e )
 		PrintAndLog("  %02X : NDEF Memory Size: %d bytes", data[2], 496);
@@ -466,6 +468,8 @@ static int ulev1_print_configuration( uint8_t *data, uint8_t startPage){
 
 	bool strg_mod_en = (data[0] & 2);
 	uint8_t authlim = (data[4] & 0x07);
+	bool nfc_cnf_en = (data[4] & 0x08);
+	bool nfc_cnf_prot_pwd = (data[4] & 0x10);
 	bool cfglck = (data[4] & 0x40);
 	bool prot = (data[4] & 0x80);
 	uint8_t vctid = data[5];
@@ -481,6 +485,10 @@ static int ulev1_print_configuration( uint8_t *data, uint8_t startPage){
 		PrintAndLog("                    - Unlimited password attempts");
 	else
 		PrintAndLog("                    - Max number of password attempts is %d", authlim);
+
+	PrintAndLog("                    - NFC counter %s", (nfc_cnf_en) ? "enabled":"disabled");
+	PrintAndLog("                    - NFC counter %s", (nfc_cnf_prot_pwd) ? "not protected":"password protection enabled");
+
 	PrintAndLog("                    - user configuration %s", cfglck ? "permanently locked":"writeable");
 	PrintAndLog("                    - %s access is protected with password", prot ? "read and write":"write");
 	PrintAndLog("                    - %02X, Virtual Card Type Identifier is %s default", vctid, (vctid==0x05)? "":"not");
@@ -814,6 +822,7 @@ int CmdHF14AMfUInfo(const char *Cmd){
 		}
 	}
 
+	// Read signature
 	if ((tagtype & (UL_EV1_48 | UL_EV1_128 | NTAG_213 | NTAG_215 | NTAG_216 | NTAG_I2C_1K | NTAG_I2C_2K	))) {
 		uint8_t ulev1_signature[32] = {0x00};
 		status = ulev1_readSignature( ulev1_signature, sizeof(ulev1_signature));
@@ -829,6 +838,7 @@ int CmdHF14AMfUInfo(const char *Cmd){
 		}
 	}
 
+	// Get Version
 	if ((tagtype & (UL_EV1_48 | UL_EV1_128 | NTAG_210 | NTAG_212 | NTAG_213 | NTAG_215 | NTAG_216 | NTAG_I2C_1K | NTAG_I2C_2K))) {
 		uint8_t version[10] = {0x00};
 		status  = ulev1_getVersion(version, sizeof(version));
@@ -1201,6 +1211,47 @@ int usage_hf_mfu_wrbl(void) {
 	return 0;
 }
 
+int usage_hf_mfu_ucauth(void) {
+	PrintAndLog("Usage:  hf mfu cauth k <key number>");
+	PrintAndLog("      0 (default): 3DES standard key");
+	PrintAndLog("      1 : all 0x00 key");
+	PrintAndLog("      2 : 0x00-0x0F key");
+	PrintAndLog("      3 : nfc key");
+	PrintAndLog("      4 : all 0x01 key");
+	PrintAndLog("      5 : all 0xff key");
+	PrintAndLog("      6 : 0x00-0xFF key\n");
+	PrintAndLog(" sample : hf mfu cauth k");
+	PrintAndLog("        : hf mfu cauth k 3");
+	return 0;
+}
+
+int usage_hf_mfu_ucsetpwd(void) {
+	PrintAndLog("Usage:  hf mfu setpwd <password (32 hex symbols)>");
+	PrintAndLog("       [password] - (32 hex symbols)");
+	PrintAndLog("");
+	PrintAndLog("sample: hf mfu setpwd 000102030405060708090a0b0c0d0e0f");
+	PrintAndLog("");
+	return 0;
+}
+
+int usage_hf_mfu_ucsetuid(void) {
+	PrintAndLog("Usage:  hf mfu setuid <uid (14 hex symbols)>");
+	PrintAndLog("       [uid] - (14 hex symbols)");
+	PrintAndLog("\nThis only works for Magic Ultralight tags.");
+	PrintAndLog("");
+	PrintAndLog("sample: hf mfu setuid 11223344556677");
+	PrintAndLog("");
+	return 0;
+}
+
+int  usage_hf_mfu_gendiverse(void){
+	PrintAndLog("Usage:  hf mfu gen <uid (8 hex symbols)>");
+	PrintAndLog("");
+	PrintAndLog("sample: hf mfu gen 11223344");
+	PrintAndLog("");
+	return 0;
+}
+
 //
 //  Mifare Ultralight / Ultralight-C / Ultralight-EV1
 //  Read and Dump Card Contents,  using auto detection of tag size.
@@ -1464,22 +1515,9 @@ int CmdHF14AMfucAuth(const char *Cmd){
 			errors = true;
 	}
 
-	if (cmdp == 'h' || cmdp == 'H')
-		errors = true;
+	if (cmdp == 'h' || cmdp == 'H') errors = true;
 	
-	if (errors) {
-		PrintAndLog("Usage:  hf mfu cauth k <key number>");
-		PrintAndLog("      0 (default): 3DES standard key");
-		PrintAndLog("      1 : all 0x00 key");
-		PrintAndLog("      2 : 0x00-0x0F key");
-		PrintAndLog("      3 : nfc key");
-		PrintAndLog("      4 : all 0x01 key");
-		PrintAndLog("      5 : all 0xff key");
-		PrintAndLog("      6 : 0x00-0xFF key");		
-		PrintAndLog("\n      sample : hf mfu cauth k");
-		PrintAndLog("               : hf mfu cauth k 3");
-		return 0;
-	} 
+	if (errors) return usage_hf_mfu_ucauth();
 
 	uint8_t *key = default_3des_keys[keyNo];
 	if (ulc_authentication(key, true))
@@ -1593,17 +1631,9 @@ int CmdTestDES(const char * cmd)
 int CmdHF14AMfucSetPwd(const char *Cmd){
 
 	uint8_t pwd[16] = {0x00};
-	
 	char cmdp = param_getchar(Cmd, 0);
 	
-	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') {	
-		PrintAndLog("Usage:  hf mfu setpwd <password (32 hex symbols)>");
-		PrintAndLog("       [password] - (32 hex symbols)");
-		PrintAndLog("");
-		PrintAndLog("sample: hf mfu setpwd 000102030405060708090a0b0c0d0e0f");
-		PrintAndLog("");
-		return 0;
-	}
+	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') return usage_hf_mfu_ucsetpwd();
 	
 	if (param_gethex(Cmd, 0, pwd, 32)) {
 		PrintAndLog("Password must include 32 HEX symbols");
@@ -1618,18 +1648,16 @@ int CmdHF14AMfucSetPwd(const char *Cmd){
 	UsbCommand resp;
 	
 	if (WaitForResponseTimeout(CMD_ACK,&resp,1500) ) {
-		if ( (resp.arg[0] & 0xff) == 1)
+		if ( (resp.arg[0] & 0xff) == 1) {
 			PrintAndLog("Ultralight-C new password: %s", sprint_hex(pwd,16));
-		else{
+		} else {
 			PrintAndLog("Failed writing at block %d", resp.arg[1] & 0xff);
 			return 1;
 		}
-	}
-	else {
+	} else {
 		PrintAndLog("command execution time out");
 		return 1;
 	}
-	
 	return 0;
 }
 
@@ -1643,15 +1671,7 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 	uint8_t uid[7] = {0x00};
 	char cmdp = param_getchar(Cmd, 0);
 	
-	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') {	
-		PrintAndLog("Usage:  hf mfu setuid <uid (14 hex symbols)>");
-		PrintAndLog("       [uid] - (14 hex symbols)");
-		PrintAndLog("\nThis only works for Magic Ultralight tags.");
-		PrintAndLog("");
-		PrintAndLog("sample: hf mfu setuid 11223344556677");
-		PrintAndLog("");
-		return 0;
-	}
+	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') return usage_hf_mfu_ucsetuid();
 	
 	if (param_gethex(Cmd, 0, uid, 14)) {
 		PrintAndLog("UID must include 14 HEX symbols");
@@ -1717,13 +1737,19 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 
 int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 
+	uint8_t uid[4];
+
+	char cmdp = param_getchar(Cmd, 0);
+	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') return usage_hf_mfu_gendiverse();
+
+	if (param_gethex(Cmd, 0, uid, 8)) {
+		PrintAndLog("UID must include 8 HEX symbols");
+		return 1;
+	}
+
 	uint8_t iv[8] = { 0x00 };
 	uint8_t block = 0x07;
 
-	// UL-EV1
-	//04 57 b6 e2 05 3f 80 UID
-	//4a f8 4b 19   PWD
-	uint8_t uid[] = { 0xF4,0xEA, 0x54, 0x8E };
 	uint8_t mifarekeyA[] = { 0xA0,0xA1,0xA2,0xA3,0xA4,0xA5 };
 	uint8_t mifarekeyB[] = { 0xB0,0xB1,0xB2,0xB3,0xB4,0xB5 };
 	uint8_t dkeyA[8] = { 0x00 };
@@ -1752,15 +1778,13 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 		, divkey         // output
 		);
 
-	PrintAndLog("3DES version");
+	PrintAndLog("-- 3DES version");
 	PrintAndLog("Masterkey    :\t %s", sprint_hex(masterkey,sizeof(masterkey)));
 	PrintAndLog("UID          :\t %s", sprint_hex(uid, sizeof(uid)));
 	PrintAndLog("Sector       :\t %0d", block);
 	PrintAndLog("Mifare key   :\t %s", sprint_hex(mifarekeyA, sizeof(mifarekeyA)));
 	PrintAndLog("Message      :\t %s", sprint_hex(mix, sizeof(mix)));
 	PrintAndLog("Diversified key: %s", sprint_hex(divkey+1, 6));
-
-	PrintAndLog("\n DES version");
 
 	for (int i=0; i < sizeof(mifarekeyA); ++i){
 		dkeyA[i] = (mifarekeyA[i] << 1) & 0xff;
@@ -1790,6 +1814,7 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 		, newpwd         // output
 		);
 	
+	PrintAndLog("\n-- DES version");
 	PrintAndLog("Mifare dkeyA :\t %s", sprint_hex(dkeyA, sizeof(dkeyA)));
 	PrintAndLog("Mifare dkeyB :\t %s", sprint_hex(dkeyB, sizeof(dkeyB)));
 	PrintAndLog("Mifare ABA   :\t %s", sprint_hex(dmkey, sizeof(dmkey)));
@@ -1813,6 +1838,10 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	// }
 	// return;
 // }
+
+
+
+
 
 //------------------------------------
 // Menu Stuff
