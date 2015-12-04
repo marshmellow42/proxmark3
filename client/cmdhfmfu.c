@@ -41,20 +41,9 @@ uint8_t default_3des_keys[KEYS_3DES_COUNT][16] = {
 		{ 0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF }	// 11 22 33
 };
 
-#define KEYS_PWD_COUNT 10
+#define KEYS_PWD_COUNT 1
 uint8_t default_pwd_pack[KEYS_PWD_COUNT][4] = {
 	{0xFF,0xFF,0xFF,0xFF}, // PACK 0x00,0x00 -- factory default
-
-	{0x4A,0xF8,0x4B,0x19}, // PACK 0xE5,0xBE -- italian bus (sniffed)
-	{0x33,0x6B,0xA1,0x19}, // PACK 0x9c,0x2d -- italian bus (sniffed)
-	{0xFF,0x90,0x6C,0xB2}, // PACK 0x12,0x9e -- italian bus (sniffed)	
-	{0x46,0x1c,0xA3,0x19}, // PACK 0xE9,0x5A -- italian bus (sniffed)
-	{0x35,0x1C,0xD0,0x19}, // PACK 0x9A,0x5a -- italian bus (sniffed)
-
-	{0x05,0x22,0xE6,0xB4}, // PACK 0x80,0x80 -- Amiiboo (sniffed) pikachu-b UID:
-	{0x7E,0x22,0xE6,0xB4}, // PACK 0x80,0x80 -- AMiiboo (sniffed) 
-	{0x02,0xE1,0xEE,0x36}, // PACK 0x80,0x80 -- AMiiboo (sniffed) sonic UID:  04d257 7ae33e8027
-	{0x32,0x0C,0x16,0x17}, // PACK 0x80,0x80 -- AMiiboo (sniffed) 
 };
 
 #define MAX_UL_TYPES 18
@@ -65,6 +54,54 @@ uint8_t UL_MEMORY_ARRAY[MAX_UL_TYPES] = {MAX_UL_BLOCKS, MAX_UL_BLOCKS, MAX_ULC_B
 	    MAX_ULEV1b_BLOCKS, MAX_NTAG_203, MAX_NTAG_203, MAX_NTAG_210, MAX_NTAG_212, MAX_NTAG_213,
 	    MAX_NTAG_215, MAX_NTAG_216, MAX_UL_BLOCKS, MAX_MY_D_NFC, MAX_MY_D_MOVE, MAX_MY_D_MOVE, MAX_MY_D_MOVE_LEAN, MAX_UL_BLOCKS};
 
+// Certain pwd generation algo nickname A.
+uint32_t ul_ev1_pwdgenA(uint8_t* uid) { 
+
+	uint8_t pos = (uid[3] ^ uid[4] ^ uid[5] ^ uid[6]) % 32;
+	
+	uint32_t xortable[] = {
+						0x4f2711c1, 0x07D7BB83, 0x9636EF07, 0xB5F4460E, 0xF271141C, 0x7D7BB038, 0x636EF871, 0x5F4468E3,
+						0x271149C7, 0xD7BB0B8F, 0x36EF8F1E, 0xF446863D, 0x7114947A, 0x7BB0B0F5, 0x6EF8F9EB, 0x44686BD7,
+						0x11494fAF, 0xBB0B075F, 0xEF8F96BE, 0x4686B57C, 0x1494F2F9, 0xB0B07DF3, 0xF8F963E6, 0x686B5FCC,
+						0x494F2799, 0x0B07D733, 0x8F963667, 0x86B5F4CE, 0x94F2719C, 0xB07D7B38, 0xF9636E70, 0x6B5F44E0
+						};
+
+	uint8_t entry[] = {0x00,0x00,0x00,0x00};
+	uint8_t pwd[] = {0x00,0x00,0x00,0x00};
+	
+	num_to_bytes( xortable[pos], 4, entry);
+
+	pwd[0] = entry[0] ^ uid[1] ^ uid[2] ^ uid[3];
+	pwd[1] = entry[1] ^ uid[0] ^ uid[2] ^ uid[4];
+	pwd[2] = entry[2] ^ uid[0] ^ uid[1] ^ uid[5];
+	pwd[3] = entry[3] ^ uid[6];
+
+	return (uint32_t)bytes_to_num(pwd, 4);
+}
+
+// Certain pwd generation algo nickname B. (very simple)
+uint32_t ul_ev1_pwdgenB(uint8_t* uid) {
+
+	uint8_t pwd[] = {0x00,0x00,0x00,0x00};
+	
+	pwd[0] = uid[1] ^ uid[3] ^ 0xAA;
+	pwd[1] = uid[2] ^ uid[4] ^ 0x55;
+	pwd[2] = uid[3] ^ uid[5] ^ 0xAA;
+	pwd[3] = uid[4] ^ uid[6] ^ 0x55;
+	return (uint32_t)bytes_to_num(pwd, 4);
+}
+
+void ul_ev1_pwdgen_selftest(){
+	
+	uint8_t uid1[] = {0x04,0x11,0x12,0x11,0x12,0x11,0x10};
+	uint32_t pwd1 = ul_ev1_pwdgenA(uid1);
+	PrintAndLog("UID | %s | %08X | %s", sprint_hex(uid1,7), pwd1, (pwd1 == 0x8432EB17)?"OK":"->8432EB17<-");
+
+	uint8_t uid2[] = {0x04,0x1f,0x98,0xea,0x1e,0x3e,0x81};		
+	uint32_t pwd2 = ul_ev1_pwdgenB(uid2);
+	PrintAndLog("UID | %s | %08X | %s", sprint_hex(uid2,7), pwd2, (pwd2 == 0x5fd37eca)?"OK":"->5fd37eca<--");
+	return;
+}
 
 static int CmdHelp(const char *Cmd);
 
@@ -276,7 +313,6 @@ static int ulev1_readSignature( uint8_t *response, uint16_t responseLength ){
 	return len;
 }
 
-
 // Fudan check checks for which error is given for a command with incorrect crc
 // NXP UL chip responds with 01, fudan 00.
 // other possible checks:
@@ -346,12 +382,12 @@ static int ul_print_default( uint8_t *data){
 
 	PrintAndLog("      Lock : %s - %s",
 				sprint_hex(data+10, 2),
-				printBits(2, data+10)
+				sprint_bin(data+10, 2)
 		);
 
 	PrintAndLog("OneTimePad : %s - %s\n",
 				sprint_hex(data + 12, 4),
-				printBits(4, data+12)
+				sprint_hex(data + 12, 4)
 		);
 
 	return 0;
@@ -442,8 +478,8 @@ static int ulc_print_3deskey( uint8_t *data){
 static int ulc_print_configuration( uint8_t *data){
 
 	PrintAndLog("--- UL-C Configuration");
-	PrintAndLog(" Higher Lockbits [40/0x28] : %s - %s", sprint_hex(data, 4), printBits(2, data));
-	PrintAndLog("         Counter [41/0x29] : %s - %s", sprint_hex(data+4, 4), printBits(2, data+4));
+	PrintAndLog(" Higher Lockbits [40/0x28] : %s - %s", sprint_hex(data, 4), sprint_bin(data, 2));
+	PrintAndLog("         Counter [41/0x29] : %s - %s", sprint_hex(data+4, 4), sprint_bin(data+4, 2));
 
 	bool validAuth = (data[8] >= 0x03 && data[8] <= 0x30);
 	if ( validAuth )
@@ -700,7 +736,8 @@ int CmdHF14AMfUInfo(const char *Cmd){
 	uint8_t dataLen = 0;
 	uint8_t authenticationkey[16] = {0x00};
 	uint8_t *authkeyptr = authenticationkey;
-	uint8_t	*key;
+	uint8_t pwd[4] = {0,0,0,0};
+	uint8_t *key = pwd;
 	uint8_t pack[4] = {0,0,0,0};
 	int len = 0;
 	char tempStr[50];
@@ -880,6 +917,23 @@ int CmdHF14AMfUInfo(const char *Cmd){
 		if ( !authlim && !hasAuthKey ) {
 			PrintAndLog("\n--- Known EV1/NTAG passwords.");
 			len = 0;
+
+				// test pwd gen A
+			num_to_bytes( ul_ev1_pwdgenA(card.uid), 4, key);
+			len = ulev1_requestAuthentication(key, pack, sizeof(pack));
+			if (len >= 1) {
+				PrintAndLog("Found a default password: %s || Pack: %02X %02X",sprint_hex(key, 4), pack[0], pack[1]);
+			}
+			if (!ul_auth_select( &card, tagtype, hasAuthKey, authkeyptr, pack, sizeof(pack))) return -1;
+
+			// test pwd gen B
+			num_to_bytes( ul_ev1_pwdgenB(card.uid), 4, key);
+			len = ulev1_requestAuthentication(key, pack, sizeof(pack));
+			if (len >= 1) {
+				PrintAndLog("Found a default password: %s || Pack: %02X %02X",sprint_hex(key, 4), pack[0], pack[1]);
+			}
+			if (!ul_auth_select( &card, tagtype, hasAuthKey, authkeyptr, pack, sizeof(pack))) return -1;
+
 			for (uint8_t i = 0; i < KEYS_PWD_COUNT; ++i ) {
 				key = default_pwd_pack[i];
 				len = ulev1_requestAuthentication(key, pack, sizeof(pack));
@@ -1646,7 +1700,6 @@ int CmdHF14AMfucSetPwd(const char *Cmd){
 	SendCommand(&c);
 
 	UsbCommand resp;
-	
 	if (WaitForResponseTimeout(CMD_ACK,&resp,1500) ) {
 		if ( (resp.arg[0] & 0xff) == 1) {
 			PrintAndLog("Ultralight-C new password: %s", sprint_hex(pwd,16));
@@ -1822,26 +1875,6 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	
 	return 0;
 }
-
-// static uint8_t * diversify_key(uint8_t * key){
-	
- // for(int i=0; i<16; i++){
-   // if(i<=6) key[i]^=cuid[i];
-   // if(i>6) key[i]^=cuid[i%7];
- // }
- // return key;
-// }
-
-// static void GenerateUIDe( uint8_t *uid, uint8_t len){
-	// for (int i=0; i<len; ++i){
-			
-	// }
-	// return;
-// }
-
-
-
-
 
 //------------------------------------
 // Menu Stuff
