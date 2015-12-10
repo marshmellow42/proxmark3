@@ -1082,11 +1082,42 @@ int CmdHF14AMf1kSim(const char *Cmd)
 
 	if(flags & FLAG_INTERACTIVE)
 	{
+		uint8_t data[40];
+		uint8_t key[6];
+
 		UsbCommand resp;
-		PrintAndLog("Press pm3-button to abort simulation");
-		while(! WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
+		PrintAndLog("Press pm3-button or send another cmd to abort simulation");
+		//while(! WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
 			//We're waiting only 1.5 s at a time, otherwise we get the
 			// annoying message about "Waiting for a response... "
+		//}
+		while(!ukbhit() ) {
+			if (!WaitForResponseTimeout(CMD_ACK,&resp,1500) ) continue;
+
+			if ( !(flags & FLAG_NR_AR_ATTACK) ) break;
+			if ( (resp.arg[0] & 0xffff) != CMD_SIMULATE_MIFARE_CARD ) break;
+
+			memset(data, 0x00, sizeof(data));
+			memset(key, 0x00, sizeof(key));
+			int len = (resp.arg[1] > sizeof(data)) ? sizeof(data) : resp.arg[1];
+			
+			memcpy(data, resp.d.asBytes, len);
+			
+			uint64_t corr_uid = 0;
+			if ( memcmp(data, "\x00\x00\x00\x00", 4) == 0 ) {
+				corr_uid = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+				tryMfk32(corr_uid, data, key);
+			} else {
+				corr_uid |= (uint64_t)data[2] << 48; 
+				corr_uid |= (uint64_t)data[1] << 40; 
+				corr_uid |= (uint64_t)data[0] << 32;
+				corr_uid |= data[7] << 24;
+				corr_uid |= data[6] << 16;
+				corr_uid |= data[5] << 8;
+				corr_uid |= data[4];
+				tryMfk64(corr_uid, data, key);
+			}
+			PrintAndLog("--");
 		}
 	}
 	
