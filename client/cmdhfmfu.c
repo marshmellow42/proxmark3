@@ -1971,7 +1971,7 @@ int usage_hf_mfu_sim(void) {
 	return 0;
 }
 
-int CmdHF14AMfUSim(const *Cmd) {
+int CmdHF14AMfUSim(const char *Cmd) {
 	char ctmp = param_getchar(Cmd, 0);
 	if ( ctmp == 'h' || ctmp == 'H' || ctmp == 0x00) return usage_hf_mfu_sim();
 
