@@ -1504,6 +1504,11 @@ int CmdHF14AMfUDump(const char *Cmd){
 		ulev1_readTearing(i, get_tearing+i, 1);
 		ulev1_readCounter(i, get_counter, sizeof(get_counter) );
 	}
+	ul_switch_off_field();
+	if ( hasAuthKey )
+		ul_auth_select( &card, tagtype, hasAuthKey, authKeyPtr, dummy_pack, sizeof(dummy_pack));
+	else
+		ul_select(&card);
 	ulev1_readSignature( get_signature, sizeof(get_signature));
 	ul_switch_off_field();
 	//get version
@@ -1521,10 +1526,10 @@ int CmdHF14AMfUDump(const char *Cmd){
 	PrintAndLog("---------------------------------");
 	PrintAndLog("GetVer-1| %s|   | %.4s", sprint_hex(dump_file_data, 4), dump_file_data);
 	PrintAndLog("GetVer-2| %s|   | %.4s", sprint_hex(dump_file_data+4, 4), dump_file_data+4);
-	PrintAndLog("GetVer-3| %s    |   | %.2s", sprint_hex(dump_file_data+8, 2), dump_file_data+8);
-	PrintAndLog("Tearing |   %s|   | %.3s", sprint_hex(dump_file_data+10, 3), dump_file_data+10);
-	PrintAndLog("Pack    | %s  |   | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
-	PrintAndLog("TBD     |       00|   | ");
+	//PrintAndLog("GetVer-3| %s      |   | %.2s", sprint_hex(dump_file_data+8, 2), dump_file_data+8);
+	PrintAndLog("Tearing |    %s|   | %.3s", sprint_hex(dump_file_data+10, 3), dump_file_data+10);
+	PrintAndLog("Pack    | %s     |    | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
+	PrintAndLog("TBD     |          00 |   | ");
 	PrintAndLog("Sig-1   | %s|   | %.4s", sprint_hex(dump_file_data+16, 4), dump_file_data+16);
 	PrintAndLog("Sig-2   | %s|   | %.4s", sprint_hex(dump_file_data+20, 4), dump_file_data+20);
 	PrintAndLog("Sig-3   | %s|   | %.4s", sprint_hex(dump_file_data+24, 4), dump_file_data+24);
@@ -1605,7 +1610,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	fwrite( dump_file_data, 1, Pages*4 + DUMP_PREFIX_LENGTH, fout );
 	fclose(fout);
 	
-	PrintAndLog("Dumped %d pages, wrote %d bytes to %s", Pages, Pages*4, filename);
+	PrintAndLog("Dumped %d pages, wrote %d bytes to %s", Pages+12, (Pages+12)*4, filename);
 	return 0;
 }
 
@@ -1937,21 +1942,59 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	return 0;
 }
 
+int CmdHF14AMfUeLoad(const char *Cmd) {
+	char ctmp = param_getchar(Cmd, 0);
+	if ( ctmp == 'h' || ctmp == 0x00) {
+		PrintAndLog("It loads emul dump from the file `filename.eml`");
+		PrintAndLog("See script dumptoemul-mfu.lua to convert the .bin to the eml");
+		PrintAndLog("Usage:  hf mfu eload u <file name w/o `.eml`> [numblocks]");
+		PrintAndLog("  u = UL");
+		PrintAndLog("  numblocks = number of blocks to load from eml file");		
+		PrintAndLog("");
+		PrintAndLog(" sample: hf mfu eload u filename");
+		PrintAndLog("         hf mfu eload u filename 57");
+		return 0;
+	}	
+	return CmdHF14AMfELoad(Cmd);
+}
+
+int usage_hf_mfu_sim(void) {
+	PrintAndLog("\nEmulating Ultralight tag from emulator memory\n");
+	PrintAndLog("\nBe sure to load the emulator memory first!\n");
+	PrintAndLog("Usage: hf mfu sim t 7 u <uid>");
+	PrintAndLog("  Options : ");
+	PrintAndLog("    h     : this help");
+	PrintAndLog("    t     : 7 = NTAG or Ultralight sim");
+	PrintAndLog("    u     : 4 or 7 byte UID");
+	PrintAndLog("\n   sample : hf 14a sim t 7");
+	PrintAndLog("          : hf 14a sim t 7 u 1122344556677\n");
+	return 0;
+}
+
+int CmdHF14AMfUSim(const *Cmd) {
+	char ctmp = param_getchar(Cmd, 0);
+	if ( ctmp == 'h' || ctmp == 'H' || ctmp == 0x00) return usage_hf_mfu_sim();
+
+	return CmdHF14ASim(Cmd);
+}
+
 //------------------------------------
 // Menu Stuff
 //------------------------------------
 static command_t CommandTable[] =
 {
-	{"help",	CmdHelp,			1, "This help"},
-	{"dbg",		CmdHF14AMfDbg,		0, "Set default debug mode"},
-	{"info",	CmdHF14AMfUInfo,	0, "Tag information"},
-	{"dump",	CmdHF14AMfUDump,	0, "Dump Ultralight / Ultralight-C / NTAG tag to binary file"},
-	{"rdbl",	CmdHF14AMfURdBl,	0, "Read block"},
-	{"wrbl",	CmdHF14AMfUWrBl,	0, "Write block"},
-	{"cauth",	CmdHF14AMfucAuth,	0, "Authentication    - Ultralight C"},
-	{"setpwd",	CmdHF14AMfucSetPwd, 1, "Set 3des password - Ultralight-C"},
-	{"setuid",	CmdHF14AMfucSetUid, 1, "Set UID - MAGIC tags only"},
-	{"gen",		CmdHF14AMfuGenDiverseKeys , 1, "Generate 3des mifare diversified keys"},
+	{"help",  CmdHelp,            1, "This help"},
+	{"dbg",   CmdHF14AMfDbg,      0, "Set default debug mode"},
+	{"info",  CmdHF14AMfUInfo,    0, "Tag information"},
+	{"dump",  CmdHF14AMfUDump,    0, "Dump Ultralight / Ultralight-C / NTAG tag to binary file"},
+	{"eload", CmdHF14AMfUeLoad,   0, "load Ultralight .eml dump file into emulator memory"},	
+	{"rdbl",  CmdHF14AMfURdBl,    0, "Read block"},
+	{"wrbl",  CmdHF14AMfUWrBl,    0, "Write block"},
+	{"cauth", CmdHF14AMfucAuth,   0, "Authentication    - Ultralight C"},
+	{"setpwd",CmdHF14AMfucSetPwd, 0, "Set 3des password - Ultralight-C"},
+	{"setuid",CmdHF14AMfucSetUid, 0, "Set UID - MAGIC tags only"},
+	{"sim",   CmdHF14AMfUSim,     0, "Simulate Ultralight from emulator memory"},		
+	{"gen",   CmdHF14AMfuGenDiverseKeys, 1, "Generate 3des mifare diversified keys"},
 	{NULL, NULL, 0, NULL}
 };
 

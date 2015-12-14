@@ -984,13 +984,22 @@ void SimulateIso14443aTag(int tagType, int flags, byte_t* data)
 			response8[0] = 0x80;
 			response8[1] = 0x80;
 			ComputeCrc14443(CRC_14443_A, response8, 2, &response8[2], &response8[3]);
+			// uid not supplied then get from emulator memory
+			if (data[0]==0) {
+				uint16_t start = 4 * (0+12);  
+				uint8_t emdata[8];
+				emlGetMemBt( emdata, start, sizeof(emdata));
+				memcpy(data, emdata, 3); //uid bytes 0-2
+				memcpy(data+3, emdata+4, 4); //uid bytes 3-7
+				flags |= FLAG_7B_UID_IN_DATA;
+			}
 		} break;
 		default: {
 			Dbprintf("Error: unkown tagtype (%d)",tagType);
 			return;
 		} break;
 	}
-	
+	 
 	// The second response contains the (mandatory) first 24 bits of the UID
 	uint8_t response2[5] = {0x00};
 
@@ -1166,7 +1175,7 @@ void SimulateIso14443aTag(int tagType, int flags, byte_t* data)
 				// ECC data,  taken from a NTAG215 amiibo token. might work. LEN: 32, + 2 crc
 				//first 12 blocks of emu are [getversion answer - check tearing - pack - 0x00 - signature]
 				uint16_t start = 4 * 4;
-				uint8_t emdata[MAX_MIFARE_FRAME_SIZE];
+				uint8_t emdata[34];
 				emlGetMemBt( emdata, start, 32);
 				AppendCrc14443a(emdata, 32);
 				EmSendCmdEx(emdata, sizeof(emdata), false);
@@ -1218,8 +1227,8 @@ void SimulateIso14443aTag(int tagType, int flags, byte_t* data)
 		} else if(receivedCmd[0] == 0x60 || receivedCmd[0] == 0x61) {	// Received an authentication request
 					
 			if ( tagType == 7 ) {   // IF NTAG /EV1  0x60 == GET_VERSION, not a authentication request.
-				uint8_t emdata[12];
-				emlGetMemBt( emdata, 0, 10 );
+				uint8_t emdata[10];
+				emlGetMemBt( emdata, 0, 8 );
 				AppendCrc14443a(emdata, sizeof(emdata)-2);
 				EmSendCmdEx(emdata, sizeof(emdata), false);	
 				p_response = NULL;

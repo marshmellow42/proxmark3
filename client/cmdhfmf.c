@@ -1225,7 +1225,7 @@ int CmdHF14AMfELoad(const char *Cmd)
 		
 	if ( ctmp == 'h' || ctmp == 0x00) {
 		PrintAndLog("It loads emul dump from the file `filename.eml`");
-		PrintAndLog("Usage:  hf mf eload [card memory] <file name w/o `.eml`>");
+		PrintAndLog("Usage:  hf mf eload [card memory] <file name w/o `.eml`> [numblocks]");
 		PrintAndLog("  [card memory]: 0 = 320 bytes (Mifare Mini), 1 = 1K (default), 2 = 2K, 4 = 4K, u = UL");
 		PrintAndLog("");
 		PrintAndLog(" sample: hf mf eload filename");
@@ -1246,9 +1246,10 @@ int CmdHF14AMfELoad(const char *Cmd)
 			nameParamNo = 0;
 		}
 	}
+	uint32_t numblk2 = param_get32ex(Cmd,2,0,10);
+	if (numblk2 > 0) numBlocks = numblk2;	
 
 	len = param_getstr(Cmd,nameParamNo,filename);
-	
 	if (len > FILE_PATH_SIZE - 4) len = FILE_PATH_SIZE - 4;
 
 	fnameptr += len;
