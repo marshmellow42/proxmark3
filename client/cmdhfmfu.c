@@ -1610,7 +1610,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	fwrite( dump_file_data, 1, Pages*4 + DUMP_PREFIX_LENGTH, fout );
 	fclose(fout);
 	
-	PrintAndLog("Dumped %d pages, wrote %d bytes to %s", Pages+12, (Pages+12)*4, filename);
+	PrintAndLog("Dumped %d pages, wrote %d bytes to %s", Pages+(DUMP_PREFIX_LENGTH/4), Pages*4 + DUMP_PREFIX_LENGTH, filename);
 	return 0;
 }
 
@@ -1942,19 +1942,24 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	return 0;
 }
 
+int usage_hf_mfu_eload(void) {
+	PrintAndLog("It loads emul dump from the file `filename.eml`");
+	PrintAndLog("Hint: See script dumptoemul-mfu.lua to convert the .bin to the eml");
+	PrintAndLog("Usage:  hf mfu eload u <file name w/o `.eml`> [numblocks]");
+	PrintAndLog("  Options:");
+	PrintAndLog("    h          : this help");
+	PrintAndLog("    u          : UL (required)");
+	PrintAndLog("    [filename] : without `.eml` (required)");
+	PrintAndLog("    numblocks  : number of blocks to load from eml file (optional)");
+	PrintAndLog("");
+	PrintAndLog("  sample: hf mfu eload u filename");
+	PrintAndLog("          hf mfu eload u filename 57");
+	return 0;
+}
+
 int CmdHF14AMfUeLoad(const char *Cmd) {
 	char ctmp = param_getchar(Cmd, 0);
-	if ( ctmp == 'h' || ctmp == 0x00) {
-		PrintAndLog("It loads emul dump from the file `filename.eml`");
-		PrintAndLog("See script dumptoemul-mfu.lua to convert the .bin to the eml");
-		PrintAndLog("Usage:  hf mfu eload u <file name w/o `.eml`> [numblocks]");
-		PrintAndLog("  u = UL");
-		PrintAndLog("  numblocks = number of blocks to load from eml file");		
-		PrintAndLog("");
-		PrintAndLog(" sample: hf mfu eload u filename");
-		PrintAndLog("         hf mfu eload u filename 57");
-		return 0;
-	}	
+	if ( ctmp == 'h' || ctmp == 'H' || ctmp == 0x00) return usage_hf_mfu_eload();
 	return CmdHF14AMfELoad(Cmd);
 }
 
@@ -1962,19 +1967,18 @@ int usage_hf_mfu_sim(void) {
 	PrintAndLog("\nEmulating Ultralight tag from emulator memory\n");
 	PrintAndLog("\nBe sure to load the emulator memory first!\n");
 	PrintAndLog("Usage: hf mfu sim t 7 u <uid>");
-	PrintAndLog("  Options : ");
-	PrintAndLog("    h     : this help");
-	PrintAndLog("    t     : 7 = NTAG or Ultralight sim");
-	PrintAndLog("    u     : 4 or 7 byte UID");
-	PrintAndLog("\n   sample : hf 14a sim t 7");
-	PrintAndLog("          : hf 14a sim t 7 u 1122344556677\n");
+	PrintAndLog("  Options   : ");
+	PrintAndLog("    h       : this help");
+	PrintAndLog("    t 7     : 7 = NTAG or Ultralight sim (required)");
+	PrintAndLog("    u <uid> : 4 or 7 byte UID (optional)");
+	PrintAndLog("\n   sample : hf mfu sim t 7");
+	PrintAndLog("          : hf mfu sim t 7 u 1122344556677\n");
 	return 0;
 }
 
 int CmdHF14AMfUSim(const char *Cmd) {
 	char ctmp = param_getchar(Cmd, 0);
 	if ( ctmp == 'h' || ctmp == 'H' || ctmp == 0x00) return usage_hf_mfu_sim();
-
 	return CmdHF14ASim(Cmd);
 }
 
