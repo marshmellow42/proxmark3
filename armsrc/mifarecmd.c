@@ -1059,43 +1059,48 @@ void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain) {
 			if(!iso14443a_select_card(uid, NULL, &cuid)) {
 				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Can't select card");
 				break;
-			};
-		};
+			}
+		}
 	
 		// reset / wipe chip before write
 		if (workFlags & MAGIC_WIPE){
 			ReaderTransmitBitsPar(wupC1,7,0, NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error: %02X",receivedAnswer[0]);
 				break;
-			};
+			}
 
 			ReaderTransmit(wipeC, sizeof(wipeC), NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wipeC error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wipeC error: %02X",receivedAnswer[0]);
 				break;
-			};
-		};	
+			}
+			// have to halt after wipe before any other commands...
+			if (mifare_classic_halt(NULL, cuid)) {
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Halt error");
+				break;
+			}
+		}	
 
 		// write block
 		if (workFlags & MAGIC_WUPC) {
 			ReaderTransmitBitsPar(wupC1,7,0, NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC1 error: %02X",receivedAnswer[0]);
 				break;
-			};
+			}
 
 			ReaderTransmit(wupC2, sizeof(wupC2), NULL);
 			if(!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC2 error");
+				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("wupC2 error: %02X",receivedAnswer[0]);
 				break;
-			};
+			}
 		}
 
 		if ((mifare_sendcmd_short(NULL, 0, ISO14443A_CMD_WRITEBLOCK, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 1) || (receivedAnswer[0] != 0x0a)) {
 			if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("write block send command error");
 			break;
-		};
+		}
 	
 		memcpy(data, datain, 16);
 		AppendCrc14443a(data, 16);
@@ -1104,14 +1109,14 @@ void MifareCSetBlock(uint32_t arg0, uint32_t arg1, uint8_t *datain) {
 		if ((ReaderReceive(receivedAnswer, receivedAnswerPar) != 1) || (receivedAnswer[0] != 0x0a)) {
 			if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("write block send data error");
 			break;
-		};	
+		}	
 		
 		// halt after write
 		if (workFlags & MAGIC_HALT) {
 			if (mifare_classic_halt(NULL, cuid)) {
 				if (MF_DBGLEVEL >= MF_DBG_ERROR)	Dbprintf("Halt error");
 				break;
-			};
+			}
 		}
 		
 		isOK = true;
