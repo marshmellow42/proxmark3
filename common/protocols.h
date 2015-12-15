@@ -139,6 +139,22 @@ NXP/Philips CUSTOM COMMANDS
 #define MIFARE_ULEV1_CHECKTEAR  0x3E
 #define MIFARE_ULEV1_VCSL       0x4B
 
+// Magic Generation 1, parameter "work flags"
+// bit 0 - need get UID
+// bit 1 - send wupC (wakeup chinese)
+// bit 2 - send HALT cmd after sequence
+// bit 3 - turn on FPGA
+// bit 4 - turn off FPGA
+// bit 5 - set datain instead of issuing USB reply (called via ARM for StandAloneMode14a)
+#define MAGIC_UID               0x01
+#define MAGIC_WUPC              0x02
+#define MAGIC_HALT              0x04
+#define MAGIC_INIT              0x08
+#define MAGIC_OFF               0x10
+#define MAGIC_DATAIN            0x20
+#define MAGIC_WIPE              0x40
+#define MAGIC_SINGLE (MAGIC_WUPC | MAGIC_HALT | MAGIC_INIT | MAGIC_OFF) //0x1E
+
 /**
 06 00 = INITIATE
 0E xx = SELECT ID (xx = Chip-ID)
@@ -161,6 +177,8 @@ NXP/Philips CUSTOM COMMANDS
 #define ISO14443B_RESET        0x0C
 #define ISO14443B_COMPLETION   0x0F
 #define ISO14443B_AUTHENTICATE 0x0A
+#define ISO14443B_PING         0xBA
+#define ISO14443B_PONG         0xAB
 
 //First byte is 26
 #define ISO15693_INVENTORY     0x01
