@@ -1522,13 +1522,13 @@ int CmdHF14AMfUDump(const char *Cmd){
 	//block read data
 	memcpy(dump_file_data+DUMP_PREFIX_LENGTH, data, Pages*4);
 
-	PrintAndLog("\nDataType| Data    |   | Ascii");
+	PrintAndLog("\nDataType| Data        |   | Ascii");
 	PrintAndLog("---------------------------------");
 	PrintAndLog("GetVer-1| %s|   | %.4s", sprint_hex(dump_file_data, 4), dump_file_data);
 	PrintAndLog("GetVer-2| %s|   | %.4s", sprint_hex(dump_file_data+4, 4), dump_file_data+4);
-	//PrintAndLog("GetVer-3| %s      |   | %.2s", sprint_hex(dump_file_data+8, 2), dump_file_data+8);
+	PrintAndLog("TBD     | 00 00       |   | ");
 	PrintAndLog("Tearing |    %s|   | %.3s", sprint_hex(dump_file_data+10, 3), dump_file_data+10);
-	PrintAndLog("Pack    | %s     |    | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
+	PrintAndLog("Pack    |    %s   |    | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
 	PrintAndLog("TBD     |          00 |   | ");
 	PrintAndLog("Sig-1   | %s|   | %.4s", sprint_hex(dump_file_data+16, 4), dump_file_data+16);
 	PrintAndLog("Sig-2   | %s|   | %.4s", sprint_hex(dump_file_data+20, 4), dump_file_data+20);
