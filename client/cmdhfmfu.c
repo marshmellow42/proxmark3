@@ -1328,7 +1328,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	uint8_t dataLen = 0;
 	uint8_t cmdp = 0;
 	uint8_t authenticationkey[16] = {0x00};
-	memset(authenticationkey, 0, sizeof(authenticationkey));
+	memset(authenticationkey, 0xFF, sizeof(authenticationkey));
 	uint8_t	*authKeyPtr = authenticationkey;
 	size_t fileNlen = 0;
 	bool errors = false;
@@ -1476,16 +1476,6 @@ int CmdHF14AMfUDump(const char *Cmd){
 
 	uint8_t	get_pack[] = {0,0};
 	iso14a_card_select_t card;
-	//attempt to read pack
-	if (!ul_auth_select( &card, tagtype, true, authKeyPtr, get_pack, sizeof(get_pack))) {
-		//reset pack
-		get_pack[0]=0;
-		get_pack[1]=0;
-	}
-	ul_switch_off_field();
-	// add pack to block read
-	memcpy(data + (Pages*4) - 4, get_pack, sizeof(get_pack));
-
 	uint8_t dump_file_data[1024+DUMP_PREFIX_LENGTH] = {0x00};
 	uint8_t get_version[] = {0,0,0,0,0,0,0,0,0};
 	uint8_t	get_tearing[] = {0,0,0};
@@ -1494,23 +1484,36 @@ int CmdHF14AMfUDump(const char *Cmd){
 	uint8_t	get_signature[32];
 	memset( get_signature, 0, sizeof(get_signature) );
 
-	if ( hasAuthKey )
-		ul_auth_select( &card, tagtype, hasAuthKey, authKeyPtr, dummy_pack, sizeof(dummy_pack));
-	else
-		ul_select(&card);
+	// not ul_c and not std ul then attempt to get deeper info
+	if (!(tagtype & UL_C || tagtype & UL)) {
+		//attempt to read pack
+		if (!ul_auth_select( &card, tagtype, true, authKeyPtr, get_pack, sizeof(get_pack))) {
+			//reset pack
+			get_pack[0]=0;
+			get_pack[1]=0;
+		}
+		ul_switch_off_field();
+		// add pack to block read
+		memcpy(data + (Pages*4) - 4, get_pack, sizeof(get_pack));
+		if ( hasAuthKey )
+			ul_auth_select( &card, tagtype, hasAuthKey, authKeyPtr, dummy_pack, sizeof(dummy_pack));
+		else
+			ul_select(&card);
 
-	ulev1_getVersion( get_version, sizeof(get_version) );
-	for ( uint8_t i = 0; i<3; ++i) {
-		ulev1_readTearing(i, get_tearing+i, 1);
-		ulev1_readCounter(i, get_counter, sizeof(get_counter) );
+		ulev1_getVersion( get_version, sizeof(get_version) );
+		for ( uint8_t i = 0; i<3; ++i) {
+			ulev1_readTearing(i, get_tearing+i, 1);
+			ulev1_readCounter(i, get_counter, sizeof(get_counter) );
+		}
+		ul_switch_off_field();
+		if ( hasAuthKey )
+			ul_auth_select( &card, tagtype, hasAuthKey, authKeyPtr, dummy_pack, sizeof(dummy_pack));
+		else
+			ul_select(&card);
+		ulev1_readSignature( get_signature, sizeof(get_signature));
+		ul_switch_off_field();
 	}
-	ul_switch_off_field();
-	if ( hasAuthKey )
-		ul_auth_select( &card, tagtype, hasAuthKey, authKeyPtr, dummy_pack, sizeof(dummy_pack));
-	else
-		ul_select(&card);
-	ulev1_readSignature( get_signature, sizeof(get_signature));
-	ul_switch_off_field();
+
 	//get version
 	memcpy(dump_file_data, get_version, sizeof(get_version));
 	//tearing
@@ -1528,7 +1531,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	PrintAndLog("GetVer-2| %s|   | %.4s", sprint_hex(dump_file_data+4, 4), dump_file_data+4);
 	PrintAndLog("TBD     | 00 00       |   | ");
 	PrintAndLog("Tearing |    %s|   | %.3s", sprint_hex(dump_file_data+10, 3), dump_file_data+10);
-	PrintAndLog("Pack    |    %s   |    | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
+	PrintAndLog("Pack    |    %s   |   | %.2s", sprint_hex(dump_file_data+13, 2), dump_file_data+13);
 	PrintAndLog("TBD     |          00 |   | ");
 	PrintAndLog("Sig-1   | %s|   | %.4s", sprint_hex(dump_file_data+16, 4), dump_file_data+16);
 	PrintAndLog("Sig-2   | %s|   | %.4s", sprint_hex(dump_file_data+20, 4), dump_file_data+20);
