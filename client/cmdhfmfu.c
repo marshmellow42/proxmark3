@@ -1458,22 +1458,6 @@ int CmdHF14AMfUDump(const char *Cmd){
 		}
 	}
 
-	// add keys to block dump
-	if (hasAuthKey) {
-		if (!swapEndian){
-			authKeyPtr = SwapEndian64(authenticationkey, dataLen, (dataLen == 16) ? 8 : 4);
-		} else {
-			authKeyPtr = authenticationkey;
-		}
-
-		if (tagtype & UL_C){ //add 4 pages
-			memcpy(data + Pages*4, authKeyPtr, dataLen);
-			Pages += dataLen/4;  
-		} else { // 2nd page from end
-			memcpy(data + (Pages*4) - 8, authenticationkey, dataLen);
-		}
-	}
-
 	uint8_t	get_pack[] = {0,0};
 	iso14a_card_select_t card;
 	uint8_t dump_file_data[1024+DUMP_PREFIX_LENGTH] = {0x00};
@@ -1542,6 +1526,22 @@ int CmdHF14AMfUDump(const char *Cmd){
 	PrintAndLog("Sig-7   | %s|   | %.4s", sprint_hex(dump_file_data+40, 4), dump_file_data+40);
 	PrintAndLog("Sig-8   | %s|   | %.4s", sprint_hex(dump_file_data+44, 4), dump_file_data+44);
 	
+	// add keys to block dump
+	if (hasAuthKey) {
+		if (!swapEndian){
+			authKeyPtr = SwapEndian64(authenticationkey, dataLen, (dataLen == 16) ? 8 : 4);
+		} else {
+			authKeyPtr = authenticationkey;
+		}
+
+		if (tagtype & UL_C){ //add 4 pages
+			memcpy(data + Pages*4, authKeyPtr, dataLen);
+			Pages += dataLen/4;  
+		} else { // 2nd page from end
+			memcpy(data + (Pages*4) - 8, authenticationkey, dataLen);
+		}
+	}
+
 	PrintAndLog("\nBlock#  | Data        |lck| Ascii");
 	PrintAndLog("---------------------------------");
 	for (i = 0; i < Pages; ++i) {
