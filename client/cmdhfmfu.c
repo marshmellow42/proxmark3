@@ -1392,6 +1392,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	//Validations
 	if(errors) return usage_hf_mfu_dump();
 
+	//if we entered a key in little endian and set the swapEndian switch - switch it...
 	if (swapEndian && hasAuthKey) 
 		authKeyPtr = SwapEndian64(authenticationkey, dataLen, (dataLen == 16) ? 8 : 4);
 
@@ -1498,6 +1499,26 @@ int CmdHF14AMfUDump(const char *Cmd){
 		ul_switch_off_field();
 	}
 
+	// format and add keys to block dump output
+	if (hasAuthKey) {
+		// if we didn't swapendian before - do it now for the sprint_hex call
+		// NOTE: default entry is bigendian (unless swapped), sprint_hex outputs little endian
+		//       need to swap to keep it the same
+		if (!swapEndian){
+			authKeyPtr = SwapEndian64(authenticationkey, dataLen, (dataLen == 16) ? 8 : 4);
+		} else {
+			authKeyPtr = authenticationkey;
+		}
+
+		if (tagtype & UL_C){ //add 4 pages
+			memcpy(data + Pages*4, authKeyPtr, dataLen);
+			Pages += dataLen/4;  
+		} else { // 2nd page from end
+			memcpy(data + (Pages*4) - 8, authenticationkey, dataLen);
+		}
+	}
+
+	//add *special* blocks to dump
 	//get version
 	memcpy(dump_file_data, get_version, sizeof(get_version));
 	//tearing
@@ -1506,9 +1527,10 @@ int CmdHF14AMfUDump(const char *Cmd){
 	memcpy(dump_file_data+13, get_pack, sizeof(get_pack));
 	//signature
 	memcpy(dump_file_data+16, get_signature, sizeof(get_signature));
-	//block read data
+	//add regular block read data to dump
 	memcpy(dump_file_data+DUMP_PREFIX_LENGTH, data, Pages*4);
 
+	PrintAndLog("\n*Special* block data:");
 	PrintAndLog("\nDataType| Data        |   | Ascii");
 	PrintAndLog("---------------------------------");
 	PrintAndLog("GetVer-1| %s|   | %.4s", sprint_hex(dump_file_data, 4), dump_file_data);
@@ -1525,23 +1547,6 @@ int CmdHF14AMfUDump(const char *Cmd){
 	PrintAndLog("Sig-6   | %s|   | %.4s", sprint_hex(dump_file_data+36, 4), dump_file_data+36);
 	PrintAndLog("Sig-7   | %s|   | %.4s", sprint_hex(dump_file_data+40, 4), dump_file_data+40);
 	PrintAndLog("Sig-8   | %s|   | %.4s", sprint_hex(dump_file_data+44, 4), dump_file_data+44);
-	
-	// add keys to block dump
-	if (hasAuthKey) {
-		if (!swapEndian){
-			authKeyPtr = SwapEndian64(authenticationkey, dataLen, (dataLen == 16) ? 8 : 4);
-		} else {
-			authKeyPtr = authenticationkey;
-		}
-
-		if (tagtype & UL_C){ //add 4 pages
-			memcpy(data + Pages*4, authKeyPtr, dataLen);
-			Pages += dataLen/4;  
-		} else { // 2nd page from end
-			memcpy(data + (Pages*4) - 8, authenticationkey, dataLen);
-		}
-	}
-
 	PrintAndLog("\nBlock#  | Data        |lck| Ascii");
 	PrintAndLog("---------------------------------");
 	for (i = 0; i < Pages; ++i) {
