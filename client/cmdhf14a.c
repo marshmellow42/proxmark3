@@ -469,7 +469,7 @@ int usage_hf_14a_sim(void) {
 	PrintAndLog("            4 = ISO/IEC 14443-4");
 	PrintAndLog("            5 = MIFARE Tnp3xxx");
 	PrintAndLog("            6 = MIFARE Mini");
-	PrintAndLog("            7 = AMIIBO (NTAG 215),  pack 0x8080");
+	PrintAndLog("            7 = NTAG 215 from emu mem");
 	PrintAndLog("    u     : 4 or 7 byte UID");
 	PrintAndLog("    x     : (Optional) performs the 'reader attack', nr/ar attack against a legitimate reader");
 	PrintAndLog("\n   sample : hf 14a sim t 1 u 1122344");
@@ -547,14 +547,17 @@ int CmdHF14ASim(const char *Cmd)
 	while(!ukbhit()){
 		if ( WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
 			if ( (resp.arg[0] & 0xffff) == CMD_SIMULATE_MIFARE_CARD ){
-				memset(data, 0x00, sizeof(data));
-				memset(key, 0x00, sizeof(key));
-				int len = (resp.arg[1] > sizeof(data)) ? sizeof(data) : resp.arg[1];
-				memcpy(data, resp.d.asBytes, len);
-				tryMfk32(uid, data, key);
-				tryMfk32_moebius(uid, data, key);
+				// attempt to get key:
+				// TODO:
+				
+				//memset(data, 0x00, sizeof(data));
+				//memset(key, 0x00, sizeof(key));
+				//int len = (resp.arg[1] > sizeof(data)) ? sizeof(data) : resp.arg[1];
+				//memcpy(data, resp.d.asBytes, len);
+				//tryMfk32(uid, data, key);
+				//tryMfk32_moebius(uid, data, key);
 				//tryMfk64(uid, data, key);
-				PrintAndLog("--");
+				//PrintAndLog("--");
 			}
 		}
 	}
