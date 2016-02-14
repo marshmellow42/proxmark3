@@ -541,15 +541,15 @@ int CmdHF14ASim(const char *Cmd)
 	clearCommandBuffer();
 	SendCommand(&c);
 
-	uint8_t data[40];
-	uint8_t key[6];
+	//uint8_t data[40];
+	//uint8_t key[6];
 	UsbCommand resp;
 	while(!ukbhit()){
 		if ( WaitForResponseTimeout(CMD_ACK,&resp,1500)) {
 			if ( (resp.arg[0] & 0xffff) == CMD_SIMULATE_MIFARE_CARD ){
 				// attempt to get key:
 				// TODO:
-				
+
 				//memset(data, 0x00, sizeof(data));
 				//memset(key, 0x00, sizeof(key));
 				//int len = (resp.arg[1] > sizeof(data)) ? sizeof(data) : resp.arg[1];
@@ -729,8 +729,9 @@ int CmdHF14ACmdRaw(const char *cmd) {
 	if(topazmode)
 		c.arg[0] |= ISO14A_TOPAZMODE;
 		
-	// Max buffer is USB_CMD_DATA_SIZE
-    c.arg[1] = (datalen & 0xFFFF) | (numbits << 16);
+		// Max buffer is USB_CMD_DATA_SIZE
+		datalen	=  (datalen > USB_CMD_DATA_SIZE) ? USB_CMD_DATA_SIZE : datalen;
+    c.arg[1] = (datalen & 0xFFFF) | ( (uint32_t)(numbits) << 16);
     memcpy(c.d.asBytes,data,datalen);
 
     SendCommand(&c);
