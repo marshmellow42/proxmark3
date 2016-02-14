@@ -622,7 +622,7 @@ void MifareNested(uint32_t arg0, uint32_t arg1, uint32_t calibrate, uint8_t *dat
 	uint16_t davg;
 	static uint16_t dmin, dmax;
 	uint8_t uid[10];
-	uint32_t cuid, nt1, nt2, nttmp, nttest, ks1;
+	uint32_t cuid = 0, nt1, nt2, nttmp, nttest, ks1;
 	uint8_t par[1];
 	uint32_t target_nt[2], target_ks[2];
 	

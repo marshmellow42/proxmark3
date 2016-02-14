@@ -1067,7 +1067,7 @@ void SimulateIso14443aTag(int tagType, int flags, byte_t* data)
 		{ .response = response5,      .response_n = sizeof(response5)     }, // Authentication answer (random nonce)
 		{ .response = response6,      .response_n = sizeof(response6)     }, // dummy ATS (pseudo-ATR), answer to RATS
 		//{ .response = response7_NTAG, .response_n = sizeof(response7_NTAG)}, // EV1/NTAG GET_VERSION response
-		{ .response = response8,      .response_n = sizeof(response8)     }, // EV1/NTAG PACK response
+		{ .response = response8,      .response_n = sizeof(response8)     } // EV1/NTAG PACK response
 		//{ .response = response9,      .response_n = sizeof(response9)     }  // EV1/NTAG CHK_TEAR response
 	};
 
@@ -1510,7 +1510,7 @@ static void TransmitFor14443a(const uint8_t *cmd, uint16_t len, uint32_t *timing
 void CodeIso14443aBitsAsReaderPar(const uint8_t *cmd, uint16_t bits, const uint8_t *parity)
 {
 	int i, j;
-	int last;
+	int last = 0;
 	uint8_t b;
 
 	ToSendReset();
@@ -1518,7 +1518,6 @@ void CodeIso14443aBitsAsReaderPar(const uint8_t *cmd, uint16_t bits, const uint8
 	// Start of Communication (Seq. Z)
 	ToSend[++ToSendMax] = SEC_Z;
 	LastProxToAirDuration = 8 * (ToSendMax+1) - 6;
-	last = 0;
 
 	size_t bytecount = nbytes(bits);
 	// Generate send structure for the data bits
@@ -1733,7 +1732,7 @@ int EmSend4bitEx(uint8_t resp, bool correctionNeeded){
 	Code4bitAnswerAsTag(resp);
 	int res = EmSendCmd14443aRaw(ToSend, ToSendMax, correctionNeeded);
 	// do the tracing for the previous reader request and this tag answer:
-	uint8_t par[1];
+	uint8_t par[1] = {0x00};
 	GetParity(&resp, 1, par);
 	EmLogTrace(Uart.output, 
 				Uart.len, 
@@ -2253,8 +2252,8 @@ void ReaderMifare(bool first_try)
 	uint8_t mf_nr_ar[]   = { 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
 	static uint8_t mf_nr_ar3;
 
-	uint8_t receivedAnswer[MAX_MIFARE_FRAME_SIZE];
-	uint8_t receivedAnswerPar[MAX_MIFARE_PARITY_SIZE];
+	uint8_t receivedAnswer[MAX_MIFARE_FRAME_SIZE] = {0};
+	uint8_t receivedAnswerPar[MAX_MIFARE_PARITY_SIZE] = {0};
 
 	if (first_try) { 
 		iso14443a_setup(FPGA_HF_ISO14443A_READER_MOD);
@@ -2270,8 +2269,8 @@ void ReaderMifare(bool first_try)
 	uint8_t par[1] = {0};	// maximum 8 Bytes to be sent here, 1 byte parity is therefore enough
 	static byte_t par_low = 0;
 	bool led_on = TRUE;
-	uint8_t uid[10]  ={0};
-	uint32_t cuid;
+	uint8_t uid[10] = {0};
+	uint32_t cuid = 0;
 
 	uint32_t nt = 0;
 	uint32_t previous_nt = 0;
@@ -2284,7 +2283,7 @@ void ReaderMifare(bool first_try)
 	static int32_t sync_cycles;
 	int catch_up_cycles = 0;
 	int last_catch_up = 0;
-	uint16_t elapsed_prng_sequences;
+	uint16_t elapsed_prng_sequences = 0;
 	uint16_t consecutive_resyncs = 0;
 	int isOK = 0;
 
@@ -2316,8 +2315,8 @@ void ReaderMifare(bool first_try)
 	int16_t debug_info_nr = -1;
 	uint16_t strategy = 0;
 	int32_t debug_info[MAX_STRATEGY][NUM_DEBUG_INFOS];
-	uint32_t select_time;
-	uint32_t halt_time;
+	uint32_t select_time = 0;
+	uint32_t halt_time = 0;
 	
 	for(uint16_t i = 0; TRUE; i++) {
 		
@@ -2345,6 +2344,7 @@ void ReaderMifare(bool first_try)
 			SpinDelay(200);
 			iso14443a_setup(FPGA_HF_ISO14443A_READER_MOD);
 			SpinDelay(100);
+			WDT_HIT();
 		}
 		
 		if(!iso14443a_select_card(uid, NULL, &cuid)) {
@@ -2505,6 +2505,8 @@ void ReaderMifare(bool first_try)
 
 	mf_nr_ar[3] &= 0x1F;
 
+	WDT_HIT();
+	
 	if (isOK == -4) {
 		if (MF_DBGLEVEL >= 3) {
 			for (uint16_t i = 0; i <= MAX_STRATEGY; i++) {
