@@ -387,7 +387,7 @@ static int ul_print_default( uint8_t *data){
 
 	PrintAndLog("OneTimePad : %s - %s\n",
 				sprint_hex(data + 12, 4),
-				sprint_hex(data + 12, 4)
+				sprint_bin(data + 12, 4)
 		);
 
 	return 0;
@@ -1639,7 +1639,7 @@ int CmdHF14AMfucAuth(const char *Cmd){
 	//Change key to user defined one
 	if (cmdp == 'k' || cmdp == 'K'){
 		keyNo = param_get8(Cmd, 1);
-		if(keyNo > KEYS_3DES_COUNT) 
+		if(keyNo >= KEYS_3DES_COUNT) 
 			errors = true;
 	}
 
