@@ -1249,9 +1249,16 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
 	LED_A_ON();
 	bool PwdMode = arg0 & 0x1;
 	uint8_t Page = (arg0 & 0x2) >> 1;
+	bool brute = (arg0 & 0x4); //brute force attempt - go fast...
 	uint32_t i = 0;
 	bool RegReadMode = (Block == 0xFF);//regular read mode
+	uint8_t	startWait = 5;
+	int samples = 12000;
 
+	if (brute) {
+		startWait = 0;
+		samples = 1025;
+	}
 	//clear buffer now so it does not interfere with timing later
 	BigBuf_Clear_ext(false);
 
@@ -1262,7 +1269,7 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
 	LFSetupFPGAForADC(95, true);
 	StartTicks();
 	// make sure tag is fully powered up...
-	WaitMS(5);
+	WaitMS(startWait);
 	// Trigger T55x7 Direct Access Mode with start gap
 	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
 	WaitUS(START_GAP);
@@ -1291,10 +1298,12 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
 
 	// Acquisition
 	// Now do the acquisition
-	DoPartialAcquisition(0, true, 12000);
+	DoPartialAcquisition(0, true, samples);
 
 	// Turn the field off
-	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
+	if (!brute)
+		FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
+	
 	cmd_send(CMD_ACK,0,0,0,0,0);    
 	LED_A_OFF();
 }

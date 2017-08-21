@@ -1234,7 +1234,10 @@ int AquireData( uint8_t page, uint8_t block, bool pwdmode, uint32_t password ){
 		PrintAndLog("command execution time out");
 		return 0;
 	}
-	getSamples(12000,true);
+	if (page == 2) 
+		getSamples(1025,true);
+	else
+		getSamples(12000,true);
 	return 1;
 }
 
@@ -1392,6 +1395,18 @@ int CmdT55xxWipe(const char *Cmd) {
 	return 0;
 }
 
+bool testGraphSame(int *last) {
+	int i = 0, graphsum = 0;
+	int length = (1024 > GraphTraceLen) ? GraphTraceLen	: 1024;
+	for ( i = 0; i < length; i++) {
+		graphsum += GraphBuffer[i]; 
+	}
+	//PrintAndLog("i=%i - last=%i", graphsum, *last);
+	bool ret = ( (graphsum > *last + 300) || (graphsum < *last - 300) ) ;
+	*last = graphsum;
+	return ret;
+}
+
 int CmdT55xxBruteForce(const char *Cmd) {
 
 	// load a default pwd file.
@@ -1399,7 +1414,7 @@ int CmdT55xxBruteForce(const char *Cmd) {
 	char filename[FILE_PATH_SIZE]={0};
 	int keycnt = 0;
 	int ch;
-	uint8_t stKeyBlock = 20;
+	uint16_t stKeyBlock = 20;
 	uint8_t *keyBlock = NULL, *p = NULL;
 	uint32_t start_password = 0x00000000; //start password
 	uint32_t end_password   = 0xFFFFFFFF; //end   password
@@ -1408,7 +1423,7 @@ int CmdT55xxBruteForce(const char *Cmd) {
 	char cmdp = param_getchar(Cmd, 0);
 	if (cmdp == 'h' || cmdp == 'H') return usage_t55xx_bruteforce();
 
-	keyBlock = calloc(stKeyBlock, 6);
+	keyBlock = calloc(stKeyBlock, 4);
 	if (keyBlock == NULL) return 1;
 
 	if (cmdp == 'i' || cmdp == 'I') {
@@ -1441,8 +1456,8 @@ int CmdT55xxBruteForce(const char *Cmd) {
 			buf[8] = 0;
 
 			if ( stKeyBlock - keycnt < 2) {
-				p = realloc(keyBlock, 6*(stKeyBlock+=10));
-				if (!p) {
+				p = realloc(keyBlock, 4*(stKeyBlock+=10));
+				if (p==NULL) {
 					PrintAndLog("Cannot allocate memory for defaultKeys");
 					free(keyBlock);
 					fclose(f);
@@ -1466,7 +1481,23 @@ int CmdT55xxBruteForce(const char *Cmd) {
 		PrintAndLog("Loaded %d keys", keycnt);
 		
 		// loop
-		uint64_t testpwd = 0x00;
+
+		//prime once to turn on antenna, prime second time to get valid lastTest value
+		uint64_t testpwd = 1;
+		if ( !AquireData(2, T55x7_CONFIGURATION_BLOCK, true, testpwd)) {
+			PrintAndLog("Aquireing data from device failed. Quitting");
+			free(keyBlock);
+			return 0;
+		}
+		if ( !AquireData(2, T55x7_CONFIGURATION_BLOCK, true, testpwd)) {
+			PrintAndLog("Aquireing data from device failed. Quitting");
+			free(keyBlock);
+			return 0;
+		}
+		int lastTest = 0;
+		found = testGraphSame(&lastTest);
+		found = false;
+		//testpwd = 0x00;
 		for (uint16_t c = 0; c < keycnt; ++c ) {
 
 			if (ukbhit()) {
@@ -1479,15 +1510,16 @@ int CmdT55xxBruteForce(const char *Cmd) {
 
 			testpwd = bytes_to_num(keyBlock + 4*c, 4);
 
-			PrintAndLog("Testing %08X", testpwd);
+			PrintAndLog("Testing[%i] %08X", c, testpwd);
 
-			if ( !AquireData(T55x7_PAGE0, T55x7_CONFIGURATION_BLOCK, true, testpwd)) {
+			if ( !AquireData(2, T55x7_CONFIGURATION_BLOCK, true, testpwd)) {
 				PrintAndLog("Aquireing data from device failed. Quitting");
 				free(keyBlock);
 				return 0;
 			}
 
-			found = tryDetectModulation();
+			found = testGraphSame(&lastTest);
+			//found = tryDetectModulation();
 
 			if ( found ) {
 				PrintAndLog("Found valid password: [%08X]", testpwd);
@@ -1531,6 +1563,7 @@ int CmdT55xxBruteForce(const char *Cmd) {
 			free(keyBlock);
 			return 0;
 		}
+		//found = testGraphSame(&lastTest);
 		found = tryDetectModulation();
 
 		if (found) break;
