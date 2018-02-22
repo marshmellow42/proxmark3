@@ -36,7 +36,7 @@ addons:
     notification_email: marshmellowrf@gmail.com
     build_command_prepend: "make clean"
     build_command: "make all"
-    branch_pattern: coverity-scan
+    branch_pattern: coverity_scan
     #coverity turned on for now... change to coverity_scan to turn back off
 
 
